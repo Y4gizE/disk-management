@@ -3,14 +3,25 @@ import sys
 import json
 import socket
 import argparse
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template, redirect, url_for
 from flask_cors import CORS
 from pathlib import Path
 import threading
 import time
+import os
 
-app = Flask(__name__)
+from datetime import datetime
+
+app = Flask(__name__, template_folder='templates')
 CORS(app)
+app.secret_key = os.urandom(24)  # For flash messages
+
+# Custom Jinja2 filters
+@app.template_filter('datetime')
+def format_datetime(timestamp, format='%d.%m.%Y %H:%M:%S'):
+    if timestamp is None:
+        return "-"
+    return datetime.fromtimestamp(timestamp).strftime(format)
 
 # Global variables
 DEVICES = {}
@@ -34,6 +45,47 @@ class Device:
             'shared_folders': self.shared_folders,
             'last_seen': self.last_seen
         }
+
+# Web Interface
+@app.route('/')
+def index():
+    """Ana sayfa"""
+    devices = [device.to_dict() for device in DEVICES.values()]
+    return render_template('index.html', devices=devices)
+
+@app.route('/register_device_ui', methods=['GET', 'POST'])
+def register_device_ui():
+    """Cihaz kayıt formu"""
+    if request.method == 'POST':
+        device_id = request.form.get('device_id')
+        port = request.form.get('port', DEFAULT_PORT)
+        shared_folder = request.form.get('shared_folder', '')
+        
+        if not device_id:
+            return "Cihaz ID'si gerekli", 400
+            
+        shared_folders = [f.strip() for f in shared_folder.split(',') if f.strip()]
+        
+        # Register the device
+        data = {
+            'device_id': device_id,
+            'port': port,
+            'shared_folders': shared_folders
+        }
+        
+        # Call the API endpoint
+        response = app.test_client().post(
+            '/register',
+            data=json.dumps(data),
+            content_type='application/json'
+        )
+        
+        if response.status_code == 200:
+            return redirect(url_for('index'))
+        else:
+            return f"Hata oluştu: {response.data.decode()}", 400
+    
+    return render_template('register.html')
 
 # API Endpoints
 @app.route('/register', methods=['POST'])

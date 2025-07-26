@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 offset-md-3">
+        <div class="card">
+            <div class="card-header">
+                <h2 class="h5 mb-0">Yeni Cihaz Ekle</h2>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('register_device_ui') }}">
+                    <div class="mb-3">
+                        <label for="device_id" class="form-label">Cihaz ID *</label>
+                        <input type="text" class="form-control" id="device_id" name="device_id" required>
+                        <div class="form-text">Bu cihazı tanımlayacak benzersiz bir isim girin.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="port" class="form-label">Port</label>
+                        <input type="number" class="form-control" id="port" name="port" value="5000">
+                        <div class="form-text">Varsayılan: 5000</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="shared_folder" class="form-label">Paylaşılacak Klasörler</label>
+                        <input type="text" class="form-control" id="shared_folder" name="shared_folder">
+                        <div class="form-text">Virgülle ayırarak birden fazla klasör ekleyebilirsiniz. Örnek: /home/kullanici/Belgeler, /home/kullanici/Resimler</div>
+                    </div>
+                    
+                    <div class="d-grid gap-2">
+                        <button type="submit" class="btn btn-primary">Kaydet</button>
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">İptal</a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
