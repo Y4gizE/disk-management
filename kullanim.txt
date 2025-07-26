@@ -1,0 +1,147 @@
+Dağıtık Depolama Sistemi Kullanım Kılavuzu
+========================================
+
+Bu uygulama, Docker kullanarak birden fazla cihaz arasında dosya paylaşımı yapmanızı sağlayan bir sistemdir.
+
+1. Gereksinimler
+---------------
+- Docker Desktop (Windows/Mac) veya Docker Engine (Linux)
+- Python 3.7 veya üzeri (isteğe bağlı, sadece doğrudan çalıştırmak için)
+- İnternet bağlantısı (Docker imajını indirmek için)
+
+2. Otomatik Kurulum (Önerilen Yöntem)
+----------------------------------
+1. `kur.bat` dosyasına sağ tıklayıp "Yönetici olarak çalıştır" seçeneğini seçin
+2. Betik otomatik olarak tüm gerekli adımları gerçekleştirecektir
+3. Kurulum tamamlandığında sunucu otomatik olarak başlayacaktır
+
+3. Manuel Kurulum (Alternatif Yöntem)
+----------------------------------
+### Sunucu Kurulumu
+1. Docker'ı başlatın
+2. Yönetici olarak bir komut istemi açın
+3. Proje klasörüne gidin
+4. Docker imajını oluşturun:
+   ```
+   docker build -t distributed-storage .
+   ```
+5. Docker konteynerini başlatın:
+   ```
+   docker run -d -p 5000:5000 --name storage-server distributed-storage
+   ```
+6. Sunucu şimdi çalışıyor olacaktır. IP adresini öğrenmek için:
+   - Windows/Mac: `localhost` veya `127.0.0.1`
+   - Ağdaki diğer cihazlardan erişim için yerel IP adresinizi kullanın
+
+4. İstemci Kurulumu (Her Cihaz İçin)
+-----------------------------------
+
+### Python ile Kullanım (Docker Olmadan):
+1. Gereksinimleri yükleyin:
+   ```
+   pip install -r requirements.txt
+   ```
+2. Cihazı sunucuya kaydedin:
+   ```
+   python main.py client register SUNUCU_IP_ADRESI --device-id CIHAZ_ADI --share PAYLASILACAK_KLASOR_YOLU
+   ```
+   Örnek:
+   ```
+   python main.py client register 192.168.1.100 --device-id ofis-bilgisayari --share C:\PaylasilanDosyalar
+   ```
+
+### Docker ile Kullanım:
+1. Docker imajını oluşturun (henüz yapılmadıysa):
+   ```
+   docker build -t distributed-storage .
+   ```
+2. Cihazı çalıştırın ve sunucuya bağlayın:
+   ```
+   docker run -d --name cihaz1 -v /paylasilan/klasor:/app/shared distributed-storage python main.py client register SUNUCU_IP_ADRESI --device-id cihaz1 --share /app/shared
+   ```
+
+5. Paylaşılan Klasörleri Listeleme
+------------------------------
+```
+python main.py client list SUNUCU_IP_ADRESI
+```
+veya
+```
+docker run --rm distributed-storage python main.py client list SUNUCU_IP_ADRESI
+```
+
+6. Örnek Kullanım Senaryoları
+-------------------------
+
+### Senaryo 1: Basit Sunucu ve İstemci
+1. Sunucuyu başlatın:
+   ```
+   docker run -d -p 5000:5000 --name storage-server distributed-storage
+   ```
+2. İlk cihazı bağlayın:
+   ```
+   python main.py client register 192.168.1.100 --device-id dizustu --share C:\Dosyalarim
+   ```
+3. İkinci cihazı bağlayın:
+   ```
+   python main.py client register 192.168.1.100 --device-id telefon --share D:\Fotograflar
+   ```
+4. Paylaşılan klasörleri listeleyin:
+   ```
+   python main.py client list 192.168.1.100
+   ```
+
+7. Sorun Giderme
+--------------
+### Yaygın Sorunlar ve Çözümleri
+
+#### Bağlantı Sorunları
+- **Belirti**: Sunucuya bağlanılamıyor
+- **Çözüm**:
+  1. Sunucunun çalıştığından emin olun: `docker ps`
+  2. Güvenlik duvarı ayarlarını kontrol edin
+  3. IP adresinin doğru olduğundan emin olun
+
+#### Docker Sorunları
+- **Belirti**: Docker komutları çalışmıyor
+- **Çözüm**:
+  1. Docker'ın çalıştığından emin olun
+  2. Komutu yönetici olarak çalıştırmayı deneyin
+  3. Docker servisini yeniden başlatın
+
+#### Paylaşılan Klasör Sorunları
+- **Belirti**: Paylaşılan klasörler görünmüyor
+- **Çözüm**:
+  1. Klasör yolunun doğru olduğundan emin olun
+  2. Klasör izinlerini kontrol edin
+  3. Sunucuyu yeniden başlatın
+
+8. Sık Kullanılan Komutlar
+-----------------------
+```
+# Çalışan konteynerleri listele
+docker ps
+
+# Tüm konteynerleri listele (durdurulmuşlar dahil)
+docker ps -a
+
+# Konteyner loglarını görüntüle
+docker logs CONTAINER_ID
+
+# Konteyner durdurma
+docker stop CONTAINER_ID
+
+# Konteyner silme
+docker rm CONTAINER_ID
+
+# Tüm durmuş konteynerleri temizle
+docker container prune
+```
+
+9. Güvenlik Notları
+-----------------
+- Bu uygulama şu an geliştirme aşamasındadır ve üretim ortamında kullanılmamalıdır
+- Güvenlik için en kısa sürede kimlik doğrulama eklenmesi önerilir
+- Hassas dosyaları paylaşırken dikkatli olun
+- Varsayılan portu değiştirmek için `-p` parametresini kullanın
+- Mümkünse VPN veya özel ağ kullanın
