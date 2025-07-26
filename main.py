@@ -160,6 +160,11 @@ def format_datetime(timestamp, format='%d.%m.%Y %H:%M:%S'):
 DEVICES = {}
 SHARED_FOLDERS = {}
 HOST_IP = '0.0.0.0'
+PUBLIC_IP = None
+RELAY_SERVERS = [
+    {'url': 'http://relay1.example.com:5000', 'status': 'unknown'},
+    {'url': 'http://relay2.example.com:5000', 'status': 'unknown'}
+]
 DEFAULT_PORT = 5000
 
 class Device:
@@ -274,35 +279,111 @@ def share_folder():
 def get_local_ip():
     """Get the local IP address of the machine"""
     try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        ip = s.getsockname()[0]
-        s.close()
-        return ip
+        # Try different methods to get local IP
+        try:
+            # Method 1: Using hostname
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            if not local_ip.startswith('127.'):
+                return local_ip
+        except:
+            pass
+            
+        # Method 2: Using UDP connection
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            if local_ip:
+                return local_ip
+        except:
+            pass
+            
+        return '0.0.0.0'
     except Exception as e:
-        return '127.0.0.1'
+        return '0.0.0.0'
 
 def start_server(port):
     """Start the Flask server"""
     print(f"Starting server on http://{get_local_ip()}:{port}")
     app.run(host=HOST_IP, port=port, debug=True, use_reloader=False)
 
-def register_with_server(server_ip, server_port, device_id, shared_folders=None):
-    """Register this device with the central server"""
-    if shared_folders is None:
-        shared_folders = []
-    
-    import requests
-    url = f"http://{server_ip}:{server_port}/register"
+def get_public_ip():
+    """Get the public IP address of the machine"""
     try:
-        response = requests.post(url, json={
+        response = requests.get('https://api.ipify.org?format=json', timeout=5)
+        if response.status_code == 200:
+            return response.json().get('ip')
+    except:
+        pass
+    return None
+
+def check_relay_server(server_url):
+    """Check if a relay server is available"""
+    try:
+        response = requests.get(f"{server_url}/status", timeout=5)
+        return response.status_code == 200
+    except:
+        return False
+
+def register_with_server(server_ip, server_port, device_id, shared_folders=None, is_relay=False):
+    """Register this device with the central server or relay server"""
+    try:
+        # Get public IP if available
+        global PUBLIC_IP
+        if not PUBLIC_IP:
+            PUBLIC_IP = get_public_ip()
+            
+        # Prepare registration data
+        data = {
             'device_id': device_id,
-            'port': DEFAULT_PORT,
-            'shared_folders': shared_folders
-        })
-        return response.json()
-    except requests.exceptions.RequestException as e:
-        return {'error': str(e)}
+            'local_ip': get_local_ip(),
+            'public_ip': PUBLIC_IP,
+            'port': 5000,
+            'is_relay': is_relay,
+            'shared_folders': shared_folders or [SHARED_FOLDER],
+            'timestamp': int(time.time())
+        }
+        
+        # If this is a relay registration, add relay-specific info
+        if is_relay:
+            data['relay_capacity'] = 100  # Max concurrent connections
+            data['region'] = 'europe'     # Could be dynamic based on IP
+        
+        # Send registration request
+        base_url = f"http://{server_ip}:{server_port}" if not is_relay else server_ip
+        url = f"{base_url}/api/register"
+        
+        response = requests.post(url, json=data, timeout=10)
+        
+        if response.status_code == 200:
+            print(f"Successfully registered with {'relay' if is_relay else 'server'} {server_ip}:{server_port}")
+            
+            # If this is a relay server, update our relay server list
+            if is_relay:
+                update_relay_servers(server_ip, server_port, 'active')
+                
+            return True
+        else:
+            print(f"Failed to register: {response.text}")
+            return False
+            
+    except Exception as e:
+        print(f"Error registering with server: {e}")
+        if is_relay:
+            update_relay_servers(server_ip, server_port, 'unavailable')
+        return False
+
+def update_relay_servers(server_url, status):
+    """Update the status of a relay server"""
+    global RELAY_SERVERS
+    for server in RELAY_SERVERS:
+        if server['url'] == server_url:
+            server['status'] = status
+            break
+    else:
+        RELAY_SERVERS.append({'url': server_url, 'status': status})
 
 def list_shared_folders(server_ip, server_port):
     """List all shared folders from the server"""
