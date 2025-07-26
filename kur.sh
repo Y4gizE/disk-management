@@ -1,7 +1,13 @@
 #!/bin/bash
 
-echo "Dağıtık Depolama Sistemi Kurulumu"
-echo "================================="
+# Renk tanımları
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+NC='\033[0m' # No Color
+
+echo -e "${GREEN}Dağıtık Depolama Sistemi Kurulumu${NC}"
+echo -e "${GREEN}=================================${NC}"
 echo ""
 
 # Docker yüklü mü?
@@ -67,7 +73,17 @@ SHARED_FOLDER="$HOME/Downloads/DiskStorage"
 # Ensure the shared folder exists and has correct permissions
 echo -e "${GREEN}Paylaşılan klasör ayarlanıyor: $SHARED_FOLDER${NC}"
 if [ ! -d "$SHARED_FOLDER" ]; then
+    echo -e "${YELLOW}Klasör oluşturuluyor: $SHARED_FOLDER${NC}"
     mkdir -p "$SHARED_FOLDER"
+    if [ $? -ne 0 ]; then
+        echo -e "${RED}Hata: Klasör oluşturulamadı. İzinleri kontrol edin.${NC}"
+        exit 1
+    fi
+    # Set full permissions
+    chmod 777 "$SHARED_FOLDER"
+    if [ $? -ne 0 ]; then
+        echo -e "${YELLOW}Uyarı: Klasör izinleri değiştirilemedi. Kşıtlamalı erişim olabilir.${NC}"
+    fi
     chmod 777 "$SHARED_FOLDER"
     echo -e "${GREEN}Paylaşılan klasör oluşturuldu: $SHARED_FOLDER${NC}"
 else
