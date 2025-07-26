@@ -22,44 +22,94 @@ pause
 exit /b 0
 
 :docker_running
-echo Docker çalışıyor mu kontrol ediliyor...
-docker ps >nul 2>&1
-if %ERRORLEVEL% NEQ 0 (
-    echo HATA: Docker çalışmıyor. Lütfen Docker Desktop'ı başlatın ve tekrar deneyin.
-    start "" "C:\Program Files\Docker\Docker\Docker Desktop.exe"
-    echo Lütfen Docker Desktop'ın başlamasını bekleyin ve ardından bu pencereyi kapatıp tekrar deneyin.
+@echo off
+setlocal enabledelayedexpansion
+
+echo ===================================================
+echo Disk Storage Kurulum ve Yapilandirma
+echo ===================================================
+echo.
+
+:: Check if Docker is installed
+docker --version >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo Docker bulunamadi. Lutfen Docker Desktop'i yukleyin:
+    echo https://www.docker.com/products/docker-desktop
+    echo Yükleme tamamlandiktan sonra bilgisayarinizi yeniden baslatin ve bu betigi tekrar calistirin.
+    pause
+    exit /b 1
+)
+
+:: Check if Docker is running
+docker info >nul 2>&1
+if %ERRORLEVEL% neq 0 (
+    echo Docker calismiyor. Docker Desktop baslatiliyor...
+    start "" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
+    echo Docker'in baslamasi bekleniyor...
+    timeout /t 30 /nobreak >nul
+    
+    :: Check again if Docker is running
+    docker info >nul 2>&1
+    if %ERRORLEVEL% neq 0 (
+        echo Docker baslatilamadi. Lutfen Docker Desktop'i manuel olarak baslatin ve bu betigi tekrar calistirin.
+        pause
+        exit /b 1
+    )
+)
+
+echo Docker yuklu ve calisiyor.
+echo.
+
+:: Create shared folder if it doesn't exist
+set "SHARED_FOLDER=%USERPROFILE%\Downloads\DiskStorage"
+if not exist "%SHARED_FOLDER%" (
+    echo Paylasilan klasor olusturuluyor: %SHARED_FOLDER%
+    mkdir "%SHARED_FOLDER%"
+    echo Klasor olusturuldu: %SHARED_FOLDER%
+) else (
+    echo Paylasilan klasor zaten mevcut: %SHARED_FOLDER%
+)
+
+echo.
+echo Konteyner olusturuluyor ve baslatiliyor...
+
+:: Stop and remove existing container if it exists
+docker stop disk-storage-container >nul 2>&1
+docker rm disk-storage-container >nul 2>&1
+
+:: Build and start the container
+docker build -t disk-storage .
+if %ERRORLEVEL% neq 0 (
+    echo Hata: Konteyner olusturulamadi.
+    pause
+    exit /b 1
+)
+
+docker run -d ^
+    -p 5000:5000 ^
+    --name disk-storage-container ^
+    -v "%SHARED_FOLDER%:/shared_storage" ^
+    --restart unless-stopped ^
+    disk-storage
+
+if %ERRORLEVEL% neq 0 (
+    echo Hata: Konteyner baslatilamadi.
     pause
     exit /b 1
 )
 
 echo.
-echo Docker imajı oluşturuluyor...
-docker build -t distributed-storage .
-if %ERRORLEVEL% NEQ 0 (
-    echo HATA: Docker imajı oluşturulurken bir hata oluştu.
-    pause
-    exit /b 1
-)
+echo ===================================================
+echo Disk Storage basariyla kuruldu ve calisiyor!
+echo Web Arayuzu: http://localhost:5000
+echo Paylasilan Klasor: %SHARED_FOLDER%
+echo.
+echo Bu klasoru kullanarak dosyalarinizi paylasabilirsiniz.
+echo 5GB'lık bir disk kotasi uygulanmistir.
+echo ===================================================
+echo.
 
-echo.
-echo Sunucu başlatılıyor...
-docker run -d -p 5000:5000 --name storage-server distributed-storage
-if %ERRORLEVEL% NEQ 0 (
-    echo UYARI: Sunucu zaten çalışıyor olabilir. Mevcut konteyner durdurulup yeniden başlatılıyor...
-    docker stop storage-server >nul 2>&1
-    docker rm storage-server >nul 2>&1
-    docker run -d -p 5000:5000 --name storage-server distributed-storage
-)
+:: Open browser
+start http://localhost:5000
 
-echo.
-echo =================================
-echo Sunucu başarıyla başlatıldı!
-echo Sunucu adresi: http://localhost:5000
-echo.
-echo İstemci eklemek için şu komutu kullanın:
-echo python main.py client register localhost --device-id CIHAZ_ADI --share PAYLASILACAK_KLASOR
-echo.
-echo Örnek:
-echo python main.py client register localhost --device-id bilgisayarim --share C:\PaylasilanDosyalar
-echo.
 pause

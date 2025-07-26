@@ -3,18 +3,148 @@ import sys
 import json
 import socket
 import argparse
-from flask import Flask, request, jsonify, render_template, redirect, url_for
-from flask_cors import CORS
-from pathlib import Path
-import threading
+import shutil
 import time
-import os
+import threading
+import subprocess
+from pathlib import Path
+from datetime import datetime
+from flask import Flask, request, jsonify, render_template, redirect, url_for, send_file, flash
+from flask_cors import CORS
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Constants
+SHARED_FOLDER = os.path.join(str(Path.home()), 'Downloads', 'Shared')
+STORAGE_LIMIT = 5 * 1024 * 1024 * 1024  # 5GB in bytes
 
 from datetime import datetime
 
 app = Flask(__name__, template_folder='templates')
 CORS(app)
 app.secret_key = os.urandom(24)  # For flash messages
+
+# Ensure shared folder exists
+os.makedirs(SHARED_FOLDER, exist_ok=True)
+
+class FileChangeHandler(FileSystemEventHandler):
+    """Handle file system change events"""
+    def on_modified(self, event):
+        if not event.is_directory:
+            self.sync_file(event.src_path)
+    
+    def on_created(self, event):
+        if not event.is_directory:
+            self.sync_file(event.src_path)
+    
+    def on_deleted(self, event):
+        if not event.is_directory:
+            self.notify_peers('delete', event.src_path)
+    
+    def sync_file(self, file_path):
+        """Sync file changes to peer devices"""
+        if os.path.isfile(file_path):
+            self.notify_peers('update', file_path)
+    
+    def notify_peers(self, action, file_path):
+        """Notify peer devices about file changes"""
+        rel_path = os.path.relpath(file_path, SHARED_FOLDER)
+        for device_id, device in DEVICES.items():
+            if device_id != socket.gethostname():
+                try:
+                    # In a real app, send notification to peer's API
+                    pass
+                except Exception as e:
+                    print(f"Error notifying {device_id}: {str(e)}")
+
+# Start file system watcher
+event_handler = FileChangeHandler()
+observer = Observer()
+observer.schedule(event_handler, SHARED_FOLDER, recursive=True)
+observer.start()
+
+def get_disk_usage():
+    """Get current disk usage of shared folder"""
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(SHARED_FOLDER):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            total_size += os.path.getsize(fp)
+    return total_size
+
+def check_quota(file_size):
+    """Check if adding file would exceed storage limit"""
+    current_usage = get_disk_usage()
+    return (current_usage + file_size) <= STORAGE_LIMIT, current_usage
+
+# API Endpoints
+@app.route('/api/disk_usage', methods=['GET'])
+def get_disk_usage_info():
+    """Get current disk usage information"""
+    usage = get_disk_usage()
+    return jsonify({
+        'used': usage,
+        'total': STORAGE_LIMIT,
+        'free': max(0, STORAGE_LIMIT - usage),
+        'usage_percent': (usage / STORAGE_LIMIT) * 100 if STORAGE_LIMIT > 0 else 0
+    })
+
+@app.route('/api/upload', methods=['POST'])
+def upload_file():
+    """Handle file upload with quota checking"""
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file part'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No selected file'}), 400
+    
+    # Check file size against quota
+    file.seek(0, 2)  # Go to end of file to get size
+    file_size = file.tell()
+    file.seek(0)  # Reset file pointer
+    
+    has_space, current_usage = check_quota(file_size)
+    if not has_space:
+        return jsonify({
+            'error': 'Not enough disk space',
+            'current_usage': current_usage,
+            'requested': file_size,
+            'available': max(0, STORAGE_LIMIT - current_usage)
+        }), 507  # 507 Insufficient Storage
+    
+    # Save the file
+    filename = os.path.join(SHARED_FOLDER, secure_filename(file.filename))
+    try:
+        file.save(filename)
+        return jsonify({
+            'message': 'File uploaded successfully',
+            'filename': file.filename,
+            'size': file_size,
+            'path': filename
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/download/<path:filename>', methods=['GET'])
+def download_file(filename):
+    """Download a file from shared storage"""
+    filepath = os.path.join(SHARED_FOLDER, filename)
+    if not os.path.isfile(filepath):
+        return jsonify({'error': 'File not found'}), 404
+    
+    try:
+        return send_file(
+            filepath,
+            as_attachment=True,
+            download_name=os.path.basename(filepath)
+        )
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 # Custom Jinja2 filters
 @app.template_filter('datetime')

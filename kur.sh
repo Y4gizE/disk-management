@@ -28,54 +28,90 @@ else
     sudo apt-get install -y apt-transport-https ca-certificates curl software-properties-common
 
     echo "2. Docker'ın resmi GPG anahtarı ekleniyor..."
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-
-    echo "3. Docker deposu ekleniyor..."
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-    echo "4. Docker yükleniyor..."
-    sudo apt-get update
-    sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-
-    echo "5. Docker servisi başlatılıyor..."
     sudo systemctl start docker
-    sudo systemctl enable docker
-
-    echo "6. Kullanıcının docker grubuna eklenmesi..."
-    sudo usermod -aG docker $USER
-
-    echo ""
-    echo "Docker başarıyla yüklendi!"
-    echo "Yüklemenin etkili olması için oturumunuzu kapatıp tekrar açmanız gerekebilir."
-    echo "Kurulumu tamamlamak için bu betiği tekrar çalıştırın."
-    echo ""
-    exit 0
+    
+    # Wait for Docker to start
+    sleep 5
+    
+    if ! docker info > /dev/null 2>&1; then
+        echo -e "${RED}Docker başlatılamadı. Lütfen manuel olarak başlatıp tekrar deneyin.${NC}"
+        exit 1
+    fi
 fi
 
-echo ""
-echo "Docker imajı oluşturuluyor..."
-docker build -t distributed-storage .
-if [ $? -ne 0 ]; then
-    echo "HATA: Docker imajı oluşturulurken bir hata oluştu."
+echo -e "${GREEN}✓ Docker yüklü ve çalışıyor.${NC}"
+
+# Create shared folder if it doesn't exist
+SHARED_FOLDER="$HOME/Downloads/DiskStorage"
+if [ ! -d "$SHARED_FOLDER" ]; then
+    echo -e "${GREEN}Paylaşılan klasör oluşturuluyor: $SHARED_FOLDER${NC}"
+    mkdir -p "$SHARED_FOLDER"
+    chmod 777 "$SHARED_FOLDER"
+else
+    echo -e "${GREEN}Paylaşılan klasör zaten mevcut: $SHARED_FOLDER${NC}"
+fi
+
+# Set disk quota (requires quota package)
+if ! command -v setquota &> /dev/null; then
+    echo -e "${YELLOW}Disk kotası için 'quota' paketi yükleniyor...${NC}"
+    if [ -x "$(command -v apt-get)" ]; then
+        sudo apt-get install -y quota
+    elif [ -x "$(command -v yum)" ]; then
+        sudo yum install -y quota
+    fi
+fi
+
+# Check if we can set quota
+if command -v setquota &> /dev/null; then
+    echo -e "${GREEN}5GB disk kotası ayarlanıyor...${NC}"
+    # This requires the filesystem to be mounted with usrquota,grpquota options
+    # and may require system reboot
+    sudo setquota -u $USER 5G 5G 0 0 /home
+else
+    echo -e "${YELLOW}Uyarı: Disk kotası ayarlanamadı. 'quota' paketi yüklenemedi.${NC}"
+fi
+
+echo -e "${GREEN}Konteyner oluşturuluyor ve başlatılıyor...${NC}"
+
+# Stop and remove existing container if it exists
+docker stop disk-storage-container >/dev/null 2>&1
+docker rm disk-storage-container >/dev/null 2>&1
+
+# Build and start the container
+echo -e "${GREEN}Docker imajı oluşturuluyor...${NC}"
+if ! docker build -t disk-storage .; then
+    echo -e "${RED}Hata: Konteyner oluşturulamadı.${NC}"
     exit 1
 fi
 
-echo ""
-echo "Sunucu başlatılıyor..."
-docker run -d -p 5000:5000 --name storage-server distributed-storage
-if [ $? -ne 0 ]; then
-    echo "UYARI: Sunucu zaten çalışıyor olabilir. Eski konteyner durdurulup yeniden başlatılıyor..."
-    docker stop storage-server &> /dev/null
-    docker rm storage-server &> /dev/null
-    docker run -d -p 5000:5000 --name storage-server distributed-storage
+echo -e "${GREEN}Konteyner başlatılıyor...${NC}"
+if ! docker run -d \
+    -p 5000:5000 \
+    --name disk-storage-container \
+    -v "$SHARED_FOLDER:/shared_storage" \
+    --restart unless-stopped \
+    disk-storage; then
+    
+    echo -e "${RED}Hata: Konteyner başlatılamadı.${NC}"
+    exit 1
 fi
 
-echo ""
-echo "================================="
-echo "Sunucu başarıyla başlatıldı!"
-echo "Sunucu adresi: http://localhost:5000"
-echo ""
-echo "İstemci eklemek için şu komutu kullanın:"
+echo -e "\n${GREEN}===================================================${NC}"
+echo -e "${GREEN}  Disk Storage başarıyla kuruldu ve çalışıyor!${NC}"
+echo -e "${GREEN}  Web Arayüzü: http://localhost:5000${NC}"
+echo -e "${GREEN}  Paylaşılan Klasör: $SHARED_FOLDER${NC}"
+echo -e "\n  Bu klasörü kullanarak dosyalarınızı paylaşabilirsiniz."
+echo -e "  5GB'lık bir disk kotası uygulanmıştır."
+echo -e "${GREEN}===================================================${NC}\n"
+
+# Open browser if xdg-utils is installed
+if command -v xdg-open &> /dev/null; then
+    xdg-open "http://localhost:5000" &
+elif command -v gnome-open &> /dev/null; then
+    gnome-open "http://localhost:5000" &
+fi
+
+echo -e "${GREEN}İstemci eklemek için şu komutu kullanın:${NC}"
 echo "python main.py client register localhost --device-id CIHAZ_ADI --share /paylasilan/klasor"
 echo ""
 echo "Örnek:"
