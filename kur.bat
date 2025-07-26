@@ -26,16 +26,16 @@ exit /b 0
 setlocal enabledelayedexpansion
 
 echo ===================================================
-echo Disk Storage Kurulum ve Yapilandirma
+echo Disk Storage Güncelleme ve Yapılandırma
 echo ===================================================
 echo.
 
 :: Check if Docker is installed
 docker --version >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo Docker bulunamadi. Lutfen Docker Desktop'i yukleyin:
+    echo [HATA] Docker bulunamadı. Lütfen önce Docker Desktop yükleyin:
     echo https://www.docker.com/products/docker-desktop
-    echo Yükleme tamamlandiktan sonra bilgisayarinizi yeniden baslatin ve bu betigi tekrar calistirin.
+    echo Yükleme sonrası bilgisayarınızı yeniden başlatıp bu betiği tekrar çalıştırın.
     pause
     exit /b 1
 )
@@ -43,59 +43,87 @@ if %ERRORLEVEL% neq 0 (
 :: Check if Docker is running
 docker info >nul 2>&1
 if %ERRORLEVEL% neq 0 (
-    echo Docker calismiyor. Docker Desktop baslatiliyor...
+    echo [UYARI] Docker çalışmıyor. Başlatılıyor...
     start "" "%ProgramFiles%\Docker\Docker\Docker Desktop.exe"
-    echo Docker'in baslamasi bekleniyor...
+    echo Docker'in başlaması bekleniyor...
     timeout /t 30 /nobreak >nul
     
     :: Check again if Docker is running
     docker info >nul 2>&1
     if %ERRORLEVEL% neq 0 (
-        echo Docker baslatilamadi. Lutfen Docker Desktop'i manuel olarak baslatin ve bu betigi tekrar calistirin.
+        echo [HATA] Docker başlatılamadı. Lütfen Docker Desktop'ı manuel olarak başlatıp tekrar deneyin.
         pause
         exit /b 1
     )
 )
 
-echo Docker yuklu ve calisiyor.
+echo [OK] Docker yüklü ve çalışıyor.
 echo.
+
+:: Check for container updates
+echo Kontrol ediliyor: Güncellemeler...
+set "NEEDS_UPDATE=0"
+
+:: Check if image exists and is up to date
+docker images -q disk-storage >nul
+if %ERRORLEVEL% neq 0 (
+    echo Yeni kurulum tespit edildi. Gerekli dosyalar indirilecek...
+    set "NEEDS_UPDATE=1"
+) else (
+    echo Mevcut kurulum kontrol ediliyor...
+    for /f "tokens=*" %%i in ('docker ps -a --filter "name=disk-storage-container" --format "{{.Names}}"') do (
+        if "%%i"=="disk-storage-container" (
+            echo Mevcut konteyner durduruluyor...
+            docker stop disk-storage-container >nul 2>&1
+            docker rm disk-storage-container >nul 2>&1
+            set "NEEDS_UPDATE=1"
+        )
+    )
+)
 
 :: Create shared folder if it doesn't exist
 set "SHARED_FOLDER=%USERPROFILE%\Downloads\DiskStorage"
 if not exist "%SHARED_FOLDER%" (
-    echo Paylasilan klasor olusturuluyor: %SHARED_FOLDER%
+    echo [YENİ] Paylaşılan klasör oluşturuluyor: %SHARED_FOLDER%
     mkdir "%SHARED_FOLDER%"
-    echo Klasor olusturuldu: %SHARED_FOLDER%
 ) else (
-    echo Paylasilan klasor zaten mevcut: %SHARED_FOLDER%
+    echo [OK] Paylaşılan klasör mevcut: %SHARED_FOLDER%
 )
 
-echo.
-echo Konteyner olusturuluyor ve baslatiliyor...
-
-:: Stop and remove existing container if it exists
-docker stop disk-storage-container >nul 2>&1
-docker rm disk-storage-container >nul 2>&1
-
-:: Build and start the container
-docker build -t disk-storage .
-if %ERRORLEVEL% neq 0 (
-    echo Hata: Konteyner olusturulamadi.
-    pause
-    exit /b 1
-)
-
-docker run -d ^
-    -p 5000:5000 ^
-    --name disk-storage-container ^
-    -v "%SHARED_FOLDER%:/shared_storage" ^
-    --restart unless-stopped ^
-    disk-storage
-
-if %ERRORLEVEL% neq 0 (
-    echo Hata: Konteyner baslatilamadi.
-    pause
-    exit /b 1
+if "%NEEDS_UPDATE%"=="1" (
+    echo.
+    echo ===================================================
+    echo Güncelleme yapılıyor...
+    echo ===================================================
+    
+    :: Build the new image
+    echo Yeni Docker imajı oluşturuluyor...
+    docker build -t disk-storage .
+    if %ERRORLEVEL% neq 0 (
+        echo [HATA] Konteyner oluşturulamadı.
+        pause
+        exit /b 1
+    )
+    
+    echo Yeni konteyner başlatılıyor...
+    docker run -d ^
+        -p 5000:5000 ^
+        --name disk-storage-container ^
+        -v "%SHARED_FOLDER%:/shared_storage" ^
+        --restart unless-stopped ^
+        disk-storage
+    
+    if %ERRORLEVEL% neq 0 (
+        echo [HATA] Konteyner başlatılamadı.
+        pause
+        exit /b 1
+    )
+    
+    echo [OK] Güncelleme başarıyla tamamlandı!
+) else (
+    echo.
+    echo [BİLGİ] Güncelleme gerekmiyor. Mevcut kurulum kullanılıyor.
+    docker start disk-storage-container >nul 2>&1
 )
 
 echo.

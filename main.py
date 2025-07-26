@@ -19,8 +19,11 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Constants
-SHARED_FOLDER = os.path.join(str(Path.home()), 'Downloads', 'Shared')
+SHARED_FOLDER = os.path.join(str(Path.home()), 'Downloads', 'DiskStorage')
 STORAGE_LIMIT = 5 * 1024 * 1024 * 1024  # 5GB in bytes
+
+# Ensure shared folder exists
+os.makedirs(SHARED_FOLDER, exist_ok=True)
 
 from datetime import datetime
 

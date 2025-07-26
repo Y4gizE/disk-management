@@ -41,59 +41,75 @@ fi
 
 echo -e "${GREEN}✓ Docker yüklü ve çalışıyor.${NC}"
 
-# Create shared folder if it doesn't exist
+# Check if update is needed
+NEED_UPDATE=0
+
+echo -e "${GREEN}Kontrol ediliyor: Güncellemeler...${NC}"
+
+# Check if image exists
+if ! docker images -q disk-storage >/dev/null 2>&1; then
+    echo -e "${YELLOW}Yeni kurulum tespit edildi. Gerekli dosyalar indirilecek...${NC}"
+    NEED_UPDATE=1
+else
+    echo -e "${GREEN}Mevcut kurulum kontrol ediliyor...${NC}"
+    # Check if container exists
+    if docker ps -a --filter "name=disk-storage-container" --format '{{.Names}}' | grep -q "disk-storage-container"; then
+        echo -e "${YELLOW}Mevcut konteyner durduruluyor...${NC}"
+        docker stop disk-storage-container >/dev/null 2>&1
+        docker rm disk-storage-container >/dev/null 2>&1
+        NEED_UPDATE=1
+    fi
+fi
+
+# Create shared folder with full permissions
 SHARED_FOLDER="$HOME/Downloads/DiskStorage"
+
+# Ensure the shared folder exists and has correct permissions
+echo -e "${GREEN}Paylaşılan klasör ayarlanıyor: $SHARED_FOLDER${NC}"
 if [ ! -d "$SHARED_FOLDER" ]; then
-    echo -e "${GREEN}Paylaşılan klasör oluşturuluyor: $SHARED_FOLDER${NC}"
     mkdir -p "$SHARED_FOLDER"
     chmod 777 "$SHARED_FOLDER"
+    echo -e "${GREEN}Paylaşılan klasör oluşturuldu: $SHARED_FOLDER${NC}"
 else
     echo -e "${GREEN}Paylaşılan klasör zaten mevcut: $SHARED_FOLDER${NC}"
 fi
 
-# Set disk quota (requires quota package)
-if ! command -v setquota &> /dev/null; then
-    echo -e "${YELLOW}Disk kotası için 'quota' paketi yükleniyor...${NC}"
-    if [ -x "$(command -v apt-get)" ]; then
-        sudo apt-get install -y quota
-    elif [ -x "$(command -v yum)" ]; then
-        sudo yum install -y quota
-    fi
-fi
+# Simple disk quota notice
+echo -e "${YELLOW}Not: Disk kotası manuel olarak kontrol edilecek. Maksimum 5GB kullanabilirsiniz.${NC}"
 
-# Check if we can set quota
-if command -v setquota &> /dev/null; then
-    echo -e "${GREEN}5GB disk kotası ayarlanıyor...${NC}"
-    # This requires the filesystem to be mounted with usrquota,grpquota options
-    # and may require system reboot
-    sudo setquota -u $USER 5G 5G 0 0 /home
-else
-    echo -e "${YELLOW}Uyarı: Disk kotası ayarlanamadı. 'quota' paketi yüklenemedi.${NC}"
-fi
-
-echo -e "${GREEN}Konteyner oluşturuluyor ve başlatılıyor...${NC}"
-
-# Stop and remove existing container if it exists
-docker stop disk-storage-container >/dev/null 2>&1
-docker rm disk-storage-container >/dev/null 2>&1
-
-# Build and start the container
-echo -e "${GREEN}Docker imajı oluşturuluyor...${NC}"
-if ! docker build -t disk-storage .; then
-    echo -e "${RED}Hata: Konteyner oluşturulamadı.${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}Konteyner başlatılıyor...${NC}"
-if ! docker run -d \
-    -p 5000:5000 \
-    --name disk-storage-container \
-    -v "$SHARED_FOLDER:/shared_storage" \
-    --restart unless-stopped \
-    disk-storage; then
+# Perform update if needed
+if [ "$NEED_UPDATE" -eq 1 ]; then
+    echo -e "\n${GREEN}===================================================${NC}"
+    echo -e "${GREEN}  Güncelleme yapılıyor..."
+    echo -e "===================================================${NC}"
     
-    echo -e "${RED}Hata: Konteyner başlatılamadı.${NC}"
-    exit 1
+    # Build the new image
+    echo -e "${GREEN}Docker imajı oluşturuluyor...${NC}"
+    if ! docker build -t disk-storage .; then
+        echo -e "${RED}Hata: Konteyner oluşturulamadı.${NC}"
+        exit 1
+    fi
+
+    # Start the container
+    echo -e "${GREEN}Konteyner başlatılıyor...${NC}"
+    if ! docker run -d \
+        -p 5000:5000 \
+        --name disk-storage-container \
+        -v "$SHARED_FOLDER:/shared_storage" \
+        -v /var/run/docker.sock:/var/run/docker.sock \
+        --restart unless-stopped \
+        --user $(id -u):$(id -g) \
+        disk-storage; then
+        
+        echo -e "${RED}Hata: Konteyner başlatılamadı.${NC}"
+        exit 1
+    fi
+    
+    echo -e "\n${GREEN}✓ Güncelleme başarıyla tamamlandı!${NC}"
+else
+    # Just start the existing container
+    echo -e "\n${GREEN}Güncelleme gerekmiyor. Mevcut kurulum başlatılıyor...${NC}"
+    docker start disk-storage-container >/dev/null 2>&1
 fi
 
 echo -e "\n${GREEN}===================================================${NC}"
