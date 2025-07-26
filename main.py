@@ -7,6 +7,7 @@ import shutil
 import time
 import threading
 import subprocess
+import netifaces
 from pathlib import Path
 from datetime import datetime
 from flask import Flask, request, jsonify, render_template, redirect, url_for, send_file, flash
@@ -14,6 +15,7 @@ from flask_cors import CORS
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from dotenv import load_dotenv
+from zeroconf import ServiceInfo, Zeroconf
 
 # Load environment variables
 load_dotenv()
@@ -166,6 +168,10 @@ RELAY_SERVERS = [
     {'url': 'http://relay2.example.com:5000', 'status': 'unknown'}
 ]
 DEFAULT_PORT = 5000
+SERVICE_NAME = "DiskStorage"
+SERVICE_TYPE = "_http._tcp.local."
+zeroconf = None
+service_info = None
 
 class Device:
     def __init__(self, device_id, ip, port, shared_folders):
@@ -187,9 +193,14 @@ class Device:
 # Web Interface
 @app.route('/')
 def index():
-    """Ana sayfa"""
-    devices = [device.to_dict() for device in DEVICES.values()]
-    return render_template('index.html', devices=devices)
+    # Trigger device discovery in the background
+    discovery_thread = threading.Thread(target=discover_devices)
+    discovery_thread.daemon = True
+    discovery_thread.start()
+    
+    # Convert Device objects to dictionaries for the template
+    devices_list = [device.to_dict() for device in DEVICES.values()]
+    return render_template('index.html', devices=devices_list)
 
 @app.route('/register_device_ui', methods=['GET', 'POST'])
 def register_device_ui():
@@ -240,12 +251,46 @@ def register_device():
     DEVICES[device_id] = Device(device_id, ip, port, shared_folders)
     return jsonify({'status': 'success', 'message': f'Device {device_id} registered'})
 
-@app.route('/devices', methods=['GET'])
+@app.route('/api/devices', methods=['GET'])
 def list_devices():
-    return jsonify({
-        device_id: device.to_dict() 
-        for device_id, device in DEVICES.items()
-    })
+    """List all discovered devices"""
+    try:
+        # Trigger a new discovery in the background
+        discovery_thread = threading.Thread(target=discover_devices)
+        discovery_thread.daemon = True
+        discovery_thread.start()
+        
+        # Clean up old devices (not seen in last 5 minutes)
+        current_time = time.time()
+        devices_to_remove = []
+        
+        for device_name, device in list(DEVICES.items()):
+            if current_time - device.last_seen > 300:  # 5 minutes
+                devices_to_remove.append(device_name)
+        
+        for device_name in devices_to_remove:
+            del DEVICES[device_name]
+        
+        # Convert to list of dictionaries for JSON serialization
+        devices_list = [{
+            'device_id': device.device_id,
+            'ip': device.ip,
+            'port': device.port,
+            'shared_folders': device.shared_folders,
+            'last_seen': device.last_seen,
+            'status': 'online' if (current_time - device.last_seen) < 60 else 'offline'
+        } for device in DEVICES.values()]
+        
+        return jsonify({
+            'status': 'success',
+            'devices': devices_list,
+            'count': len(devices_list)
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'message': str(e)
+        }), 500
 
 @app.route('/share', methods=['POST'])
 def share_folder():
@@ -304,10 +349,97 @@ def get_local_ip():
     except Exception as e:
         return '0.0.0.0'
 
+def start_zeroconf_service(port):
+    """Start the ZeroConf service for network discovery"""
+    global zeroconf, service_info
+    
+    try:
+        # Get local IP address
+        local_ip = get_local_ip()
+        
+        # Create service info
+        service_name = f"{SERVICE_NAME} {socket.gethostname()}"
+        service_name = service_name.replace(' ', '-') + "." + SERVICE_TYPE
+        
+        desc = {
+            'version': '1.0',
+            'hostname': socket.gethostname(),
+            'port': port,
+            'ip': local_ip
+        }
+        
+        service_info = ServiceInfo(
+            SERVICE_TYPE,
+            service_name,
+            addresses=[socket.inet_aton(local_ip)],
+            port=port,
+            properties=desc,
+            server=socket.gethostname() + ".local.",
+        )
+        
+        # Register the service
+        zeroconf = Zeroconf()
+        zeroconf.register_service(service_info)
+        print(f"ZeroConf service registered: {service_name} at {local_ip}:{port}")
+        
+    except Exception as e:
+        print(f"Error starting ZeroConf service: {e}")
+
+def stop_zeroconf_service():
+    """Stop the ZeroConf service"""
+    global zeroconf
+    if zeroconf:
+        zeroconf.unregister_all_services()
+        zeroconf.close()
+        print("ZeroConf service stopped")
+
+def discover_devices():
+    """Discover other devices on the local network"""
+    from zeroconf import ServiceBrowser, Zeroconf
+    
+    class MyListener:
+        def remove_service(self, zeroconf, type, name):
+            print(f"Service {name} removed")
+            
+        def add_service(self, zeroconf, type, name):
+            info = zeroconf.get_service_info(type, name)
+            if info:
+                address = socket.inet_ntoa(info.addresses[0])
+                port = info.port
+                device_name = name.split('.')[0]
+                
+                print(f"Discovered device: {device_name} at {address}:{port}")
+                
+                # Add to discovered devices
+                DEVICES[device_name] = Device(device_name, address, port, [])
+    
+    zeroconf = Zeroconf()
+    listener = MyListener()
+    browser = ServiceBrowser(zeroconf, SERVICE_TYPE, listener)
+    
+    try:
+        # Run discovery for 5 seconds
+        time.sleep(5)
+    finally:
+        zeroconf.close()
+
 def start_server(port):
     """Start the Flask server"""
-    print(f"Starting server on http://{get_local_ip()}:{port}")
-    app.run(host=HOST_IP, port=port, debug=True, use_reloader=False)
+    global HOST_IP, zeroconf
+    HOST_IP = get_local_ip()
+    
+    # Start ZeroConf service in a separate thread
+    zeroconf_thread = threading.Thread(target=start_zeroconf_service, args=(port,))
+    zeroconf_thread.daemon = True
+    zeroconf_thread.start()
+    
+    # Start device discovery in a separate thread
+    discovery_thread = threading.Thread(target=discover_devices)
+    discovery_thread.daemon = True
+    discovery_thread.start()
+    
+    # Start Flask server
+    app.run(host=HOST_IP, port=port, debug=True, use_reloader=False, threaded=True)
 
 def get_public_ip():
     """Get the public IP address of the machine"""
