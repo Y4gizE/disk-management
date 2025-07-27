@@ -2,83 +2,203 @@
 
 {% block content %}
 <div class="row">
-    <div class="col-md-8 offset-md-2">
+    <div class="col-md-10 offset-md-1">
         <div class="d-flex justify-content-between align-items-center mb-4">
-            <h2>Yerel Ağ Cihazları</h2>
+            <h2>Dosya Paylaşım Arayüzü</h2>
             <div>
-                <button id="scanNetwork" class="btn btn-outline-primary me-2">
-                    <i class="bi bi-arrow-repeat"></i> Ağı Tara
-                </button>
-                <a href="{{ url_for('register_device_ui') }}" class="btn btn-primary">
-                    <i class="bi bi-plus-circle"></i> Manuel Ekle
+                <a href="{{ url_for('share') }}" class="btn btn-primary">
+                    <i class="bi bi-upload"></i> Dosya Yükle
                 </a>
             </div>
         </div>
-        
-        <!-- Loading Indicator -->
-        <div id="loadingIndicator" class="text-center d-none">
-            <div class="spinner-border text-primary" role="status">
-                <span class="visually-hidden">Yükleniyor...</span>
-            </div>
-            <p class="mt-2">Yerel ağ taranıyor, lütfen bekleyin...</p>
-        </div>
-        
-        <!-- Network Status -->
-        <div id="networkStatus" class="alert alert-info d-none"></div>
 
-        <div id="devicesList">
-            {% if devices %}
+        <!-- Sharing Options -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">
+                    <i class="bi bi-share"></i> Paylaşım Seçenekleri
+                </h5>
+            </div>
+            <div class="card-body">
                 <div class="row">
-                    {% for device in devices %}
-                        <div class="col-md-6 mb-3">
-                            <div class="card device-card h-100">
-                                <div class="card-body">
-                                    <div class="d-flex justify-content-between align-items-start">
-                                        <div>
-                                            <h5 class="card-title">{{ device.device_id }}</h5>
-                                            <h6 class="card-subtitle mb-2 text-muted">
-                                                <i class="bi bi-pc-display"></i> {{ device.ip }}:{{ device.port }}
-                                                <span class="badge bg-success ms-2">Çevrimiçi</span>
-                                            </h6>
-                                        </div>
-                                        <button class="btn btn-sm btn-outline-primary connect-btn" 
-                                                data-ip="{{ device.ip }}" 
-                                                data-port="{{ device.port }}">
-                                            <i class="bi bi-plug"></i> Bağlan
-                                        </button>
-                                    </div>
-                                    
-                                    {% if device.shared_folders %}
-                                        <p class="mb-1 mt-3"><i class="bi bi-folder2-open"></i> Paylaşılan Klasörler:</p>
-                                        <ul class="list-unstyled ps-3">
-                                            {% for folder in device.shared_folders %}
-                                                <li class="mb-1">
-                                                    <i class="bi bi-folder"></i> {{ folder }}
-                                                    <a href="#" class="ms-2 browse-folder" data-path="{{ folder }}">
-                                                        <i class="bi bi-box-arrow-up-right"></i> Görüntüle
-                                                    </a>
-                                                </li>
-                                            {% endfor %}
-                                        </ul>
-                                    {% else %}
-                                        <p class="text-muted"><i class="bi bi-folder-x"></i> Paylaşılan klasör yok</p>
-                                {% endif %}
-                                
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-router"></i> LAN Üzerinden Paylaşım
+                                </h5>
                                 <p class="card-text">
-                                    <small class="text-muted">
-                                        Son görülme: {{ device.last_seen|datetime }}
-                                    </small>
+                                    Yerel ağ üzerinden dosyalarınızı paylaşın.
                                 </p>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" id="lanLink" 
+                                           value="http://{{ local_ip }}:{{ port }}" readonly>
+                                    <button class="btn btn-outline-secondary" type="button" 
+                                            onclick="copyToClipboard('lanLink')">
+                                        <i class="bi bi-clipboard"></i> Kopyala
+                                    </button>
+                                </div>
+                                <div class="form-text">
+                                    Bu bağlantıyı aynı ağ içindeki diğer cihazlarla paylaşın.
+                                </div>
                             </div>
                         </div>
                     </div>
-                {% endfor %}
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">
+                                    <i class="bi bi-globe"></i> İnternet Üzerinden Paylaşım
+                                </h5>
+                                <p class="card-text">
+                                    İnternet üzerinden dosya paylaşımı için IP adresiniz.
+                                </p>
+                                <div class="input-group mb-3">
+                                    <input type="text" class="form-control" id="publicLink" 
+                                           value="http://{{ public_ip }}:{{ port }}" readonly>
+                                    <button class="btn btn-outline-secondary" type="button" 
+                                            onclick="copyToClipboard('publicLink')">
+                                        <i class="bi bi-clipboard"></i> Kopyala
+                                    </button>
+                                </div>
+                                <div class="form-text">
+                                    Not: İnternet üzerinden erişim için port yönlendirme yapılması gerekebilir.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
-        {% else %}
-            <div class="alert alert-info">
-                Henüz kayıtlı cihaz bulunmamaktadır. <a href="{{ url_for('register_device_ui') }}">Yeni bir cihaz ekleyin</a>.
+        </div>
+
+        <!-- File List -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-files"></i> Paylaşılan Dosyalar
+                </h5>
+                <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
+                    <label class="form-check-label" for="autoRefresh">Otomatik Yenile</label>
+                </div>
             </div>
-        {% endif %}
+            <div class="card-body">
+                {% if files %}
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Dosya Adı</th>
+                                    <th>Boyut</th>
+                                    <th>Değiştirilme Tarihi</th>
+                                    <th>İşlemler</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for file in files %}
+                                    <tr>
+                                        <td>
+                                            <i class="bi bi-{{ 'file-earmark' if not file.is_dir else 'folder' }}"></i>
+                                            {{ file.name }}
+                                        </td>
+                                        <td>
+                                            {% if not file.is_dir %}
+                                                {{ (file.size / 1024)|round(2) }} KB
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ file.modified|datetime }}</td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                {% if not file.is_dir %}
+                                                    <a href="{{ url_for('view_file', filename=file.name) }}" 
+                                                       class="btn btn-outline-primary" target="_blank">
+                                                        <i class="bi bi-eye"></i> Görüntüle
+                                                    </a>
+                                                    <a href="{{ url_for('download_file', filename=file.name) }}" 
+                                                       class="btn btn-outline-success">
+                                                        <i class="bi bi-download"></i> İndir
+                                                    </a>
+                                                {% endif %}
+                                                <button class="btn btn-outline-danger delete-file" 
+                                                        data-filename="{{ file.name }}">
+                                                    <i class="bi bi-trash"></i> Sil
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                {% else %}
+                    <div class="alert alert-info mb-0">
+                        <i class="bi bi-info-circle"></i> Henüz paylaşılan bir dosya bulunmuyor.
+                    </div>
+                {% endif %}
+            </div>
+        </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Copy to clipboard function
+    function copyToClipboard(elementId) {
+        const copyText = document.getElementById(elementId);
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        document.execCommand("copy");
+        
+        // Show tooltip or alert
+        const originalText = copyText.value;
+        alert("Bağlantı panoya kopyalandı: " + originalText);
+    }
+
+    // Auto refresh file list
+    let refreshInterval;
+    const autoRefreshCheckbox = document.getElementById('autoRefresh');
+    
+    function refreshFileList() {
+        if (autoRefreshCheckbox.checked) {
+            location.reload();
+        }
+    }
+    
+    // Set up auto-refresh every 30 seconds
+    document.addEventListener('DOMContentLoaded', function() {
+        refreshInterval = setInterval(refreshFileList, 30000);
+        
+        // Handle delete file buttons
+        document.querySelectorAll('.delete-file').forEach(button => {
+            button.addEventListener('click', function() {
+                const filename = this.getAttribute('data-filename');
+                if (confirm(`"${filename}" adlı dosyayı silmek istediğinize emin misiniz?`)) {
+                    fetch(`/delete/${encodeURIComponent(filename)}`, {
+                        method: 'DELETE'
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert('Dosya silinirken bir hata oluştu: ' + (data.error || 'Bilinmeyen hata'));
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('Dosya silinirken bir hata oluştu.');
+                    });
+                }
+            });
+        });
+    });
+    
+    // Clean up interval when page is unloaded
+    window.addEventListener('beforeunload', function() {
+        if (refreshInterval) clearInterval(refreshInterval);
+    });
+</script>
 {% endblock %}

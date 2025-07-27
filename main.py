@@ -7,11 +7,13 @@ import shutil
 import time
 import threading
 import subprocess
-import netifaces
 from pathlib import Path
 from datetime import datetime
-from flask import Flask, request, jsonify, render_template, redirect, url_for, send_file, flash
+from flask import Flask, request, jsonify, render_template, redirect, url_for, send_file, flash, session, abort, send_from_directory
 from flask_cors import CORS
+from functools import wraps
+from werkzeug.security import generate_password_hash, check_password_hash
+from werkzeug.utils import secure_filename
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
 from dotenv import load_dotenv
@@ -23,6 +25,7 @@ load_dotenv()
 # Constants
 SHARED_FOLDER = os.path.join(str(Path.home()), 'Downloads', 'DiskStorage')
 STORAGE_LIMIT = 5 * 1024 * 1024 * 1024  # 5GB in bytes
+DEFAULT_PASSWORD = '1234'  # Default password
 
 # Ensure shared folder exists
 os.makedirs(SHARED_FOLDER, exist_ok=True)
@@ -32,6 +35,16 @@ from datetime import datetime
 app = Flask(__name__, template_folder='templates')
 CORS(app)
 app.secret_key = os.urandom(24)  # For flash messages
+app.config['PASSWORD_HASH'] = generate_password_hash('1234')  # Default password hash
+
+# Authentication decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'authenticated' not in session:
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
 
 # Ensure shared folder exists
 os.makedirs(SHARED_FOLDER, exist_ok=True)
@@ -135,12 +148,14 @@ def upload_file():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-@app.route('/api/download/<path:filename>', methods=['GET'])
+@app.route('/download/<path:filename>', methods=['GET'])
+@login_required
 def download_file(filename):
     """Download a file from shared storage"""
     filepath = os.path.join(SHARED_FOLDER, filename)
     if not os.path.isfile(filepath):
-        return jsonify({'error': 'File not found'}), 404
+        flash('Dosya bulunamadı', 'error')
+        return redirect(url_for('index'))
     
     try:
         return send_file(
@@ -149,7 +164,22 @@ def download_file(filename):
             download_name=os.path.basename(filepath)
         )
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        flash(f'Dosya indirilirken hata oluştu: {str(e)}', 'error')
+        return redirect(url_for('index'))
+
+@app.route('/delete/<path:filename>', methods=['DELETE'])
+@login_required
+def delete_file(filename):
+    """Delete a file from shared storage"""
+    filepath = os.path.join(SHARED_FOLDER, filename)
+    if not os.path.isfile(filepath):
+        return jsonify({'success': False, 'error': 'Dosya bulunamadı'}), 404
+    
+    try:
+        os.remove(filepath)
+        return jsonify({'success': True})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # Custom Jinja2 filters
 @app.template_filter('datetime')
@@ -190,13 +220,116 @@ class Device:
             'last_seen': self.last_seen
         }
 
+# Authentication decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'authenticated' not in session:
+            return redirect(url_for('login', next=request.url))
+        return f(*args, **kwargs)
+    return decorated_function
+
+# Authentication routes
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        password = request.form.get('password')
+        if check_password_hash(app.config['PASSWORD_HASH'], password):
+            session['authenticated'] = True
+            next_page = request.args.get('next')
+            return redirect(next_page or url_for('index'))
+        flash('Invalid password', 'error')
+    return '''
+        <form method="post">
+            <h2>Enter Password</h2>
+            <input type="password" name="password" required>
+            <button type="submit">Login</button>
+        </form>
+    '''
+
+@app.route('/logout')
+def logout():
+    session.pop('authenticated', None)
+    return redirect(url_for('login'))
+
+# Helper function to get file info
+def get_file_info(file_path):
+    return {
+        'name': os.path.basename(file_path),
+        'path': file_path,
+        'size': os.path.getsize(file_path),
+        'modified': os.path.getmtime(file_path),
+        'is_dir': os.path.isdir(file_path)
+    }
+
 # Web Interface
 @app.route('/')
+@login_required
 def index():
     # Trigger device discovery in the background
     discovery_thread = threading.Thread(target=discover_devices)
     discovery_thread.daemon = True
     discovery_thread.start()
+    
+    # Get list of files in shared folder
+    files = []
+    try:
+        for item in os.listdir(SHARED_FOLDER):
+            item_path = os.path.join(SHARED_FOLDER, item)
+            files.append(get_file_info(item_path))
+    except Exception as e:
+        print(f"Error listing files: {e}")
+    
+    # Get local IP for sharing
+    local_ip = get_local_ip()
+    port = request.host.split(':')[-1] if ':' in request.host else '5000'
+    
+    return render_template('index.html', 
+                         files=files, 
+                         local_ip=local_ip, 
+                         port=port,
+                         public_ip=PUBLIC_IP or 'Not available')
+
+@app.route('/view/<path:filename>')
+@login_required
+def view_file(filename):
+    filepath = os.path.join(SHARED_FOLDER, filename)
+    if not os.path.isfile(filepath):
+        abort(404)
+    
+    try:
+        with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
+            content = f.read()
+    except:
+        return "Cannot display file content (binary or unsupported encoding)"
+    
+    return render_template('viewer.html', 
+                         filename=filename, 
+                         content=content)
+
+@app.route('/share', methods=['GET', 'POST'])
+@login_required
+def share():
+    if request.method == 'POST':
+        if 'file' not in request.files:
+            flash('No file selected', 'error')
+            return redirect(request.url)
+        
+        file = request.files['file']
+        if file.filename == '':
+            flash('No file selected', 'error')
+            return redirect(request.url)
+        
+        try:
+            filepath = os.path.join(SHARED_FOLDER, secure_filename(file.filename))
+            file.save(filepath)
+            flash('File shared successfully!', 'success')
+        except Exception as e:
+            flash(f'Error sharing file: {str(e)}', 'error')
+        
+        return redirect(url_for('share'))
+    
+    return render_template('share.html')
     
     # Convert Device objects to dictionaries for the template
     devices_list = [device.to_dict() for device in DEVICES.values()]
@@ -324,9 +457,18 @@ def share_folder():
 def get_local_ip():
     """Get the local IP address of the machine"""
     try:
-        # Try different methods to get local IP
+        # Method 1: Try to connect to an external server to get the local IP
         try:
-            # Method 1: Using hostname
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            local_ip = s.getsockname()[0]
+            s.close()
+            return local_ip
+        except:
+            pass
+            
+        # Method 2: Using hostname
+        try:
             hostname = socket.gethostname()
             local_ip = socket.gethostbyname(hostname)
             if not local_ip.startswith('127.'):
@@ -334,20 +476,9 @@ def get_local_ip():
         except:
             pass
             
-        # Method 2: Using UDP connection
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            local_ip = s.getsockname()[0]
-            s.close()
-            if local_ip:
-                return local_ip
-        except:
-            pass
-            
-        return '0.0.0.0'
+        return '127.0.0.1'
     except Exception as e:
-        return '0.0.0.0'
+        return '127.0.0.1'
 
 def start_zeroconf_service(port):
     """Start the ZeroConf service for network discovery"""

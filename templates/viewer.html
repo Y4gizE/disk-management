@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-10 offset-md-1">
+        <div class="card mb-3">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">
+                    <i class="bi bi-file-earmark-text"></i> {{ filename }}
+                </h5>
+                <div>
+                    <a href="{{ url_for('download_file', filename=filename) }}" class="btn btn-sm btn-outline-success">
+                        <i class="bi bi-download"></i> İndir
+                    </a>
+                    <a href="{{ url_for('index') }}" class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> Geri Dön
+                    </a>
+                </div>
+            </div>
+            <div class="card-body p-0">
+                <pre class="m-0 p-3" style="max-height: 70vh; overflow: auto; background-color: #f8f9fa;">{{ content }}</pre>
+            </div>
+            <div class="card-footer text-muted">
+                <small>
+                    <i class="bi bi-info-circle"></i> 
+                    Bu dosya sadece okunabilir. Düzenlemek için bilgisayarınıza indirin.
+                </small>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-share"></i> Paylaşım Bilgileri</h5>
+            </div>
+            <div class="card-body">
+                <p>Bu dosyayı paylaşmak için aşağıdaki bağlantıyı kullanabilirsiniz:</p>
+                
+                <div class="mb-3">
+                    <label class="form-label">Yerel Ağ (LAN) Bağlantısı:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="lanLink" 
+                               value="http://{{ request.host }}/view/{{ filename }}" readonly>
+                        <button class="btn btn-outline-secondary" type="button" 
+                                onclick="copyToClipboard('lanLink')">
+                            <i class="bi bi-clipboard"></i> Kopyala
+                        </button>
+                    </div>
+                    <div class="form-text">
+                        Bu bağlantı sadece aynı ağ üzerindeki cihazlarda çalışır.
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label">İnternet Bağlantısı:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="publicLink" 
+                               value="http://{{ public_ip }}:{{ request.host.split(':')[-1] if ':' in request.host else '5000' }}/view/{{ filename }}" readonly>
+                        <button class="btn btn-outline-secondary" type="button" 
+                                onclick="copyToClipboard('publicLink')">
+                            <i class="bi bi-clipboard"></i> Kopyala
+                        </button>
+                    </div>
+                    <div class="form-text">
+                        İnternet üzerinden erişim için port yönlendirme gerekebilir.
+                    </div>
+                </div>
+                
+                <div class="alert alert-info">
+                    <i class="bi bi-lock"></i> 
+                    <strong>Şifre Korumalı:</strong> Bu dosyaya erişmek için şifre gereklidir.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Copy to clipboard function
+    function copyToClipboard(elementId) {
+        const copyText = document.getElementById(elementId);
+        copyText.select();
+        copyText.setSelectionRange(0, 99999);
+        document.execCommand("copy");
+        
+        // Show tooltip or alert
+        const originalText = copyText.value;
+        alert("Bağlantı panoya kopyalandı: " + originalText);
+    }
+</script>
+{% endblock %}

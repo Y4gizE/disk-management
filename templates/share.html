@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 offset-md-2">
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-upload"></i> Dosya Yükle</h5>
+            </div>
+            <div class="card-body">
+                <form action="{{ url_for('share') }}" method="post" enctype="multipart/form-data">
+                    <div class="mb-3">
+                        <label for="file" class="form-label">Dosya Seçin</label>
+                        <input class="form-control" type="file" id="file" name="file" required>
+                        <div class="form-text">
+                            Paylaşmak istediğiniz dosyayı seçin. Maksimum dosya boyutu: 100MB
+                        </div>
+                    </div>
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary me-md-2">
+                            <i class="bi bi-arrow-left"></i> İptal
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-upload"></i> Yükle ve Paylaş
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="bi bi-info-circle"></i> Bilgi</h5>
+            </div>
+            <div class="card-body">
+                <h6>Paylaşım Seçenekleri:</h6>
+                <ul>
+                    <li>Yerel Ağ (LAN) üzerinden paylaşım için bağlantıyı diğer kullanıcılarla paylaşın.</li>
+                    <li>İnternet üzerinden paylaşım için port yönlendirme yapmanız gerekebilir.</li>
+                    <li>Dosyalarınız şifre korumalıdır. Varsayılan şifre: <code>1234</code></li>
+                </ul>
+                <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> 
+                    <strong>Güvenlik Uyarısı:</strong> Varsayılan şifreyi değiştirmeniz önerilir.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
