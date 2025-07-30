@@ -1,0 +1,230 @@
+{% extends "viewer_base.html" %}
+
+{% block content %}
+<div class="archive-container">
+    <!-- Archive header with info -->
+    <div class="alert alert-{{ 'warning' if is_rar else 'info' }} d-flex justify-content-between align-items-center">
+        <div>
+            <i class="bi bi-{{ 'file-earmark-zip-fill' if is_rar else 'archive' }}"></i> 
+            {{ 'RAR' if is_rar else 'ZIP' }} Arşiv İçeriği: {{ archive_name }}
+            <div class="mt-2">
+                <span class="badge bg-secondary">{{ file_count }} dosya</span>
+                <span class="badge bg-secondary ms-1">{{ format_size(total_size) }}</span>
+                {% if is_rar %}
+                <span class="badge bg-warning text-dark ms-1">Sadece Görüntüleme</span>
+                {% endif %}
+            </div>
+        </div>
+        <a href="{{ url_for('download_file', filename=file_path) }}" class="btn btn-sm btn-outline-light">
+            <i class="bi bi-download"></i> Tümünü İndir
+        </a>
+    </div>
+    
+    <!-- Breadcrumbs -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb bg-light p-2 rounded">
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('view_archive', filename=file_path) }}" class="text-decoration-none">
+                    <i class="bi bi-house-door"></i> Ana Dizin
+                </a>
+            </li>
+            {% for crumb in breadcrumbs %}
+                <li class="breadcrumb-item">
+                    {% if not loop.last %}
+                        <a href="{{ url_for('view_archive', filename=file_path, subpath=crumb.path) }}" class="text-decoration-none">
+                            {{ crumb.name }}
+                        </a>
+                    {% else %}
+                        {{ crumb.name }}
+                    {% endif %}
+                </li>
+            {% endfor %}
+        </ol>
+    </nav>
+    
+    <!-- File list -->
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th>Dosya Adı</th>
+                        <th class="text-end" style="width: 120px;">Boyut</th>
+                        <th style="width: 180px;">Değiştirilme Tarihi</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if has_parent %}
+                    <tr class="table-active">
+                        <td colspan="3">
+                            <a href="{{ url_for('view_archive', filename=file_path, subpath=parent_path) }}" class="text-decoration-none d-block">
+                                <i class="bi bi-arrow-90deg-up"></i> Üst Dizin
+                            </a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    
+                    {% if contents %}
+                        {% for item in contents %}
+                        <tr class="{{ 'table-active' if item.is_dir }}">
+                            <td>
+                                <a href="{{ url_for('view_archive', filename=file_path, subpath=item.path) if item.is_dir else '#' }}" 
+                                   class="text-decoration-none d-block {{ 'stretched-link' if item.is_dir }}"
+                                   {% if not item.is_dir %}
+                                   onclick="event.preventDefault(); return false;"
+                                   {% endif %}>
+                                    <div class="d-flex align-items-center">
+                                        <div class="me-2">
+                                            {% if item.is_dir %}
+                                                <i class="bi bi-folder-fill text-warning"></i>
+                                            {% else %}
+                                                {% set ext = item.name.split('.')[-1].lower() if '.' in item.name else '' %}
+                                                {% if ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'] %}
+                                                    <i class="bi bi-file-earmark-image text-primary"></i>
+                                                {% elif ext in ['pdf'] %}
+                                                    <i class="bi bi-file-earmark-pdf-fill text-danger"></i>
+                                                {% elif ext in ['doc', 'docx'] %}
+                                                    <i class="bi bi-file-earmark-word-fill text-primary"></i>
+                                                {% elif ext in ['xls', 'xlsx'] %}
+                                                    <i class="bi bi-file-earmark-excel-fill text-success"></i>
+                                                {% elif ext in ['ppt', 'pptx'] %}
+                                                    <i class="bi bi-file-earmark-ppt-fill text-danger"></i>
+                                                {% elif ext in ['zip'] %}
+                                                    <i class="bi bi-file-earmark-zip-fill text-primary"></i>
+                                                {% elif ext in ['rar'] %}
+                                                    <i class="bi bi-file-earmark-zip text-danger"></i>
+                                                {% elif ext in ['7z', 'tar', 'gz'] %}
+                                                    <i class="bi bi-file-earmark-zip-fill text-secondary"></i>
+                                                {% elif ext in ['txt', 'md', 'ini', 'conf', 'log'] %}
+                                                    <i class="bi bi-file-earmark-text"></i>
+                                                {% elif ext in ['mp3', 'wav', 'ogg', 'flac'] %}
+                                                    <i class="bi bi-file-earmark-music"></i>
+                                                {% elif ext in ['mp4', 'avi', 'mov', 'mkv', 'webm'] %}
+                                                    <i class="bi bi-file-earmark-play"></i>
+                                                {% else %}
+                                                    <i class="bi bi-file-earmark"></i>
+                                                {% endif %}
+                                            {% endif %}
+                                        </div>
+                                        <div class="text-truncate" style="max-width: 500px;">
+                                            {{ item.name }}
+                                        </div>
+                                    </div>
+                                </a>
+                            </td>
+                            <td class="text-end text-muted small align-middle">
+                                {% if not item.is_dir %}{{ format_size(item.size) }}{% else %}-{% endif %}
+                            </td>
+                            <td class="text-muted small align-middle">
+                                {{ item.date.strftime('%d.%m.%Y %H:%M') if item.date else '-' }}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="3" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                <div class="mt-2">Klasör boş</div>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Quick actions -->
+    <div class="mt-3 d-flex justify-content-between">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Dosya Yöneticisine Dön
+        </a>
+        <div>
+            <a href="#" class="btn btn-outline-secondary" onclick="window.scrollTo({top: 0, behavior: 'smooth'});">
+                <i class="bi bi-arrow-up"></i> Yukarı Çık
+            </a>
+        </div>
+    </div>
+</div>
+
+<style>
+    .archive-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .breadcrumb {
+        margin-bottom: 0;
+        font-size: 0.9rem;
+    }
+    
+    .breadcrumb-item a {
+        color: #6c757d;
+    }
+    
+    .breadcrumb-item.active {
+        color: #495057;
+        font-weight: 500;
+    }
+    
+    .table {
+        margin-bottom: 0;
+    }
+    
+    .table th {
+        background-color: #f8f9fa;
+        border-top: none;
+        font-weight: 600;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #6c757d;
+        white-space: nowrap;
+    }
+    
+    .table td {
+        vertical-align: middle;
+        padding: 0.75rem 1rem;
+    }
+    
+    .table-hover tbody tr:hover {
+        background-color: rgba(0, 0, 0, 0.02);
+    }
+    
+    .table-active {
+        background-color: rgba(0, 0, 0, 0.03);
+    }
+    
+    .table-active a {
+        color: #0d6efd;
+    }
+    
+    .badge {
+        font-weight: 500;
+        font-size: 0.75rem;
+    }
+    
+    .card {
+        border: none;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    }
+    
+    .stretched-link::after {
+        position: absolute;
+        top: 0;
+        right: 0;
+        bottom: 0;
+        left: 0;
+        z-index: 1;
+        pointer-events: auto;
+        content: "";
+        background-color: rgba(0,0,0,0);
+    }
+    
+    .position-relative {
+        position: relative;
+    }
+</style>
+{% endblock %}

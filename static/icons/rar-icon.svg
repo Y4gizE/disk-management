@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <!-- Book 1 (Bottom) -->
+    <path d="M5 14h14v6H5z" fill="#5C5CFF" stroke="#3A3AB7" stroke-width="0.5" rx="1"/>
+    <path d="M19 14v6l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5v-5z" fill="#3A3AB7" opacity="0.7"/>
+    
+    <!-- Book 2 (Middle) -->
+    <path d="M7 9h14v6H7z" fill="#7A7AFF" stroke="#4A4AC7" stroke-width="0.5" rx="1"/>
+    <path d="M21 9v6l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5v-5z" fill="#4A4AC7" opacity="0.7"/>
+    
+    <!-- Book 3 (Top) -->
+    <path d="M9 4h14v6H9z" fill="#9A9AFF" stroke="#5A5AD7" stroke-width="0.5" rx="1"/>
+    <path d="M23 4v6l-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5-2 1.5-2-1.5v-5z" fill="#5A5AD7" opacity="0.7"/>
+    
+    <!-- RAR Text -->
+    <text x="12" y="20" 
+          font-family="Arial, sans-serif" 
+          font-size="8" 
+          font-weight="bold" 
+          text-anchor="middle"
+          fill="white"
+          style="text-shadow: 0 0 2px rgba(0,0,0,0.5)">RAR</text>
+</svg>
