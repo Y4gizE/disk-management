@@ -174,10 +174,20 @@
                                             <div class="btn-group btn-group-sm">
                                                 {% if not file.is_dir %}
                                                     {% set file_ext = file.name.split('.')|last|lower %}
-                                                    {% if file_ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'pdf'] %}
+                                                    {% if file_ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'] %}
+                                                    <a href="{{ url_for('view_image_route', filename=file.relative_path) }}" 
+                                                       class="btn btn-outline-primary" target="_blank" title="Görüntüle">
+                                                            <i class="bi bi-image"></i> Görüntüle
+                                                    </a>
+                                                    {% elif file_ext == 'pdf' %}
+                                                    <a href="{{ url_for('view_pdf_route', filename=file.relative_path) }}" 
+                                                       class="btn btn-outline-primary" target="_blank" title="PDF Görüntüle">
+                                                            <i class="bi bi-file-pdf"></i> PDF Göster
+                                                    </a>
+                                                    {% else %}
                                                     <a href="{{ url_for('view_file', filename=file.relative_path) }}" 
-                                                       class="btn btn-outline-primary" target="_blank" title="Önizleme">
-                                                            <i class="bi bi-eye"></i> Önizle
+                                                       class="btn btn-outline-primary" target="_blank" title="İçeriği Gör">
+                                                            <i class="bi bi-file-earmark-text"></i> Görüntüle
                                                     </a>
                                                     {% endif %}
                                                     <a href="{{ url_for('download_file', filename=file.relative_path) }}" 

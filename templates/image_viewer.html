@@ -1,0 +1,18 @@
+{% extends "viewer_base.html" %}
+
+{% block content %}
+<div class="image-container">
+    <img src="{{ url_for('download_file', filename=file_path) }}" 
+         alt="{{ title }}" 
+         class="file-content img-fluid"
+         style="max-height: 75vh; max-width: 100%; object-fit: contain;">
+</div>
+
+<script>
+    // Enable zoom on click
+    document.querySelector('.image-container img').addEventListener('click', function() {
+        this.style.maxHeight = this.style.maxHeight === 'none' ? '75vh' : 'none';
+        this.style.cursor = this.style.cursor === 'zoom-out' ? 'zoom-in' : 'zoom-out';
+    });
+</script>
+{% endblock %}

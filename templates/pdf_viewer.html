@@ -1,0 +1,144 @@
+{% extends "viewer_base.html" %}
+
+{% block content %}
+<iframe src="{{ url_for('download_file', filename=file_path) }}" 
+        class="file-content" 
+        style="width: 100%; height: 80vh; border: none;">
+    Tarayıcınız PDF görüntülemeyi desteklemiyor. 
+    <a href="{{ url_for('download_file', filename=file_path) }}">PDF'yi indirmek için tıklayın</a>
+</iframe>
+
+<div class="controls mt-3">
+    <button onclick="zoomIn()" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-zoom-in"></i> Yakınlaştır
+    </button>
+    <button onclick="zoomOut()" class="btn btn-sm btn-outline-secondary ms-2">
+        <i class="bi bi-zoom-out"></i> Uzaklaştır
+    </button>
+    <button onclick="fitWidth()" class="btn btn-sm btn-outline-secondary ms-2">
+        <i class="bi bi-arrows-angle-expand"></i> Genişliğe Sığdır
+    </button>
+    <span class="ms-3">
+        Sayfa <span id="page_num"></span> / <span id="page_count"></span>
+    </span>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+<script>
+    // Initialize PDF.js
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+    
+    let pdfDoc = null,
+        pageNum = 1,
+        pageRendering = false,
+        pageNumPending = null,
+        scale = 1.0,
+        canvas = document.createElement('canvas'),
+        ctx = canvas.getContext('2d');
+    
+    // Replace iframe with canvas for better PDF rendering
+    const iframe = document.querySelector('iframe');
+    const container = iframe.parentNode;
+    container.replaceChild(canvas, iframe);
+    
+    // Load the PDF
+    pdfjsLib.getDocument(iframe.src).promise.then(function(pdf) {
+        pdfDoc = pdf;
+        document.getElementById('page_count').textContent = pdf.numPages;
+        renderPage(1);
+    });
+    
+    function renderPage(num) {
+        pageRendering = true;
+        pdfDoc.getPage(num).then(function(page) {
+            const viewport = page.getViewport({ scale: scale });
+            canvas.height = viewport.height;
+            canvas.width = viewport.width;
+            
+            const renderContext = {
+                canvasContext: ctx,
+                viewport: viewport
+            };
+            
+            const renderTask = page.render(renderContext);
+            
+            renderTask.promise.then(function() {
+                pageRendering = false;
+                if (pageNumPending !== null) {
+                    renderPage(pageNumPending);
+                    pageNumPending = null;
+                }
+            });
+        });
+        
+        document.getElementById('page_num').textContent = num;
+    }
+    
+    function queueRenderPage(num) {
+        if (pageRendering) {
+            pageNumPending = num;
+        } else {
+            renderPage(num);
+        }
+    }
+    
+    function zoomIn() {
+        scale *= 1.25;
+        renderPage(pageNum);
+    }
+    
+    function zoomOut() {
+        scale /= 1.25;
+        renderPage(pageNum);
+    }
+    
+    function fitWidth() {
+        const containerWidth = container.clientWidth;
+        pdfDoc.getPage(pageNum).then(function(page) {
+            const viewport = page.getViewport({ scale: 1.0 });
+            scale = containerWidth / viewport.width;
+            renderPage(pageNum);
+        });
+    }
+    
+    // Keyboard navigation
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+            // Next page
+            if (pageNum < pdfDoc.numPages) {
+                pageNum++;
+                queueRenderPage(pageNum);
+            }
+        } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+            // Previous page
+            if (pageNum > 1) {
+                pageNum--;
+                queueRenderPage(pageNum);
+            }
+        } else if (e.key === 'Home') {
+            // First page
+            pageNum = 1;
+            queueRenderPage(pageNum);
+        } else if (e.key === 'End') {
+            // Last page
+            pageNum = pdfDoc.numPages;
+            queueRenderPage(pageNum);
+        } else if (e.key === '+' || e.key === '=') {
+            // Zoom in
+            zoomIn();
+            e.preventDefault();
+        } else if (e.key === '-' || e.key === '_') {
+            // Zoom out
+            zoomOut();
+            e.preventDefault();
+        } else if (e.key === '0' || e.key === ')') {
+            // Fit to width
+            fitWidth();
+            e.preventDefault();
+        }
+    });
+    
+    // Initial render
+    fitWidth();
+</script>
+{% endblock %}

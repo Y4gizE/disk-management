@@ -441,22 +441,68 @@ def index(subpath=''):
                          current_path=subpath,
                          breadcrumbs=breadcrumbs)
 
-@app.route('/view/<path:filename>')
+@app.route('/view-image/<path:filename>')
 @login_required
-def view_file(filename):
+def view_image_route(filename):
+    """View an image file in a dedicated viewer."""
     filepath = os.path.join(SHARED_FOLDER, filename)
     if not os.path.isfile(filepath):
         abort(404)
     
+    # Check if the file is an image
+    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
+    if not any(filename.lower().endswith(ext) for ext in image_extensions):
+        abort(400, "Not an image file")
+    
+    return render_template('image_viewer.html',
+                         title=os.path.basename(filename),
+                         file_path=filename)
+
+@app.route('/view-pdf/<path:filename>')
+@login_required
+def view_pdf_route(filename):
+    """View a PDF file in a dedicated viewer."""
+    filepath = os.path.join(SHARED_FOLDER, filename)
+    if not os.path.isfile(filepath):
+        abort(404)
+    
+    # Check if the file is a PDF
+    if not filename.lower().endswith('.pdf'):
+        abort(400, "Not a PDF file")
+    
+    return render_template('pdf_viewer.html',
+                         title=os.path.basename(filename),
+                         file_path=filename)
+
+@app.route('/view/<path:filename>')
+@login_required
+def view_file(filename):
+    """View a file in the appropriate viewer based on its type."""
+    filepath = os.path.join(SHARED_FOLDER, filename)
+    if not os.path.isfile(filepath):
+        abort(404)
+    
+    # Determine the file type and redirect to the appropriate viewer
+    filename_lower = filename.lower()
+    
+    # Image files
+    image_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg']
+    if any(filename_lower.endswith(ext) for ext in image_extensions):
+        return redirect(url_for('view_image_route', filename=filename))
+    
+    # PDF files
+    elif filename_lower.endswith('.pdf'):
+        return redirect(url_for('view_pdf_route', filename=filename))
+    
+    # Text files (fallback)
     try:
         with open(filepath, 'r', encoding='utf-8', errors='ignore') as f:
             content = f.read()
+        return render_template('viewer.html', 
+                            filename=filename, 
+                            content=content)
     except:
         return "Cannot display file content (binary or unsupported encoding)"
-    
-    return render_template('viewer.html', 
-                         filename=filename, 
-                         content=content)
 
 @app.route('/share', methods=['GET', 'POST'])
 @login_required
