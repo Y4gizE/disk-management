@@ -152,16 +152,23 @@ def upload_file():
 @login_required
 def download_file(filename):
     """Download a file from shared storage"""
-    filepath = os.path.join(SHARED_FOLDER, filename)
-    if not os.path.isfile(filepath):
+    # Normalize the filename and handle Windows paths
+    filename = filename.strip('/').replace('\\', '/')
+    filepath = os.path.normpath(os.path.join(SHARED_FOLDER, filename)).replace('\\', '/')
+    
+    # Security check to prevent directory traversal
+    shared_folder_abs = os.path.abspath(SHARED_FOLDER).replace('\\', '/')
+    filepath_abs = os.path.abspath(filepath).replace('\\', '/')
+    
+    if not filepath_abs.startswith(shared_folder_abs) or not os.path.isfile(filepath_abs):
         flash('Dosya bulunamadı', 'error')
         return redirect(url_for('index'))
     
     try:
         return send_file(
-            filepath,
+            filepath_abs,
             as_attachment=True,
-            download_name=os.path.basename(filepath)
+            download_name=os.path.basename(filepath_abs)
         )
     except Exception as e:
         flash(f'Dosya indirilirken hata oluştu: {str(e)}', 'error')
@@ -170,15 +177,25 @@ def download_file(filename):
 @app.route('/delete/<path:filename>', methods=['DELETE'])
 @login_required
 def delete_file(filename):
-    """Delete a file from shared storage"""
-    filepath = os.path.join(SHARED_FOLDER, filename)
-    if not os.path.isfile(filepath):
-        return jsonify({'success': False, 'error': 'Dosya bulunamadı'}), 404
+    # Normalize the filename and handle Windows paths
+    filename = filename.strip('/').replace('\\', '/')
+    filepath = os.path.normpath(os.path.join(SHARED_FOLDER, filename)).replace('\\', '/')
+    
+    # Security check to prevent directory traversal
+    shared_folder_abs = os.path.abspath(SHARED_FOLDER).replace('\\', '/')
+    filepath_abs = os.path.abspath(filepath).replace('\\', '/')
+    
+    if not filepath_abs.startswith(shared_folder_abs) or not os.path.exists(filepath_abs):
+        return jsonify({'success': False, 'error': 'Dosya veya klasör bulunamadı'}), 404
     
     try:
-        os.remove(filepath)
+        if os.path.isfile(filepath_abs):
+            os.remove(filepath_abs)
+        else:
+            shutil.rmtree(filepath_abs)
         return jsonify({'success': True})
     except Exception as e:
+        print(f"Error deleting {filepath_abs}: {e}")
         return jsonify({'success': False, 'error': str(e)}), 500
 
 # Custom Jinja2 filters
@@ -253,32 +270,164 @@ def logout():
     return redirect(url_for('login'))
 
 # Helper function to get file info
-def get_file_info(file_path):
-    return {
-        'name': os.path.basename(file_path),
-        'path': file_path,
-        'size': os.path.getsize(file_path),
-        'modified': os.path.getmtime(file_path),
-        'is_dir': os.path.isdir(file_path)
-    }
+def get_folder_size(folder_path):
+    """Calculate the total size of a folder and all its contents."""
+    total_size = 0
+    for dirpath, dirnames, filenames in os.walk(folder_path):
+        for f in filenames:
+            fp = os.path.join(dirpath, f)
+            # Skip if it's a symlink or inaccessible
+            if not os.path.islink(fp):
+                try:
+                    total_size += os.path.getsize(fp)
+                except (OSError, PermissionError):
+                    continue
+    return total_size
+
+def format_size(size_bytes):
+    """Convert size in bytes to human-readable format."""
+    if size_bytes == 0:
+        return "0 B"
+    size_names = ("B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB")
+    i = 0
+    while size_bytes >= 1024 and i < len(size_names) - 1:
+        size_bytes /= 1024
+        i += 1
+    return f"{size_bytes:.2f} {size_names[i]}"
+
+def get_file_info(file_path, base_path=None):
+    if base_path is None:
+        base_path = SHARED_FOLDER
+    
+    try:
+        # Make sure both paths are absolute and normalized
+        file_path_abs = os.path.abspath(file_path).replace('\\', '/')
+        base_path_abs = os.path.abspath(base_path).replace('\\', '/')
+        
+        # Get the relative path from the shared folder
+        rel_path = os.path.relpath(file_path_abs, SHARED_FOLDER).replace('\\', '/')
+        
+        # If we're at the root, make sure relative_path is empty
+        if rel_path == '.' or file_path_abs == SHARED_FOLDER.replace('\\', '/'):
+            rel_path = ''
+        
+        # For directories, make sure the path ends with a slash
+        is_dir = os.path.isdir(file_path_abs)
+        if is_dir and rel_path and not rel_path.endswith('/'):
+            rel_path += '/'
+        
+        # Get the name of the file/directory
+        name = os.path.basename(file_path_abs)
+        
+        # Get size information
+        if is_dir:
+            print(f"Calculating size for folder: {file_path_abs}")
+            size_bytes = get_folder_size(file_path_abs)
+            formatted_size = format_size(size_bytes)
+            raw_size = size_bytes
+            print(f"Folder size for {name}: {formatted_size}")
+        else:
+            try:
+                size_bytes = os.path.getsize(file_path_abs)
+                formatted_size = format_size(size_bytes)
+                raw_size = size_bytes
+                print(f"File size for {name}: {formatted_size}")
+            except (OSError, PermissionError) as e:
+                print(f"Error getting size for {file_path_abs}: {e}")
+                size_bytes = 0
+                formatted_size = "0 B"
+                raw_size = 0
+        
+        file_info = {
+            'name': name,
+            'path': file_path_abs,
+            'relative_path': rel_path,
+            'size': raw_size,
+            'formatted_size': formatted_size,
+            'modified': os.path.getmtime(file_path_abs),
+            'is_dir': is_dir
+        }
+        
+        print(f"File info for {name}: {file_info}")
+        return file_info
+        
+    except Exception as e:
+        print(f"Error in get_file_info for {file_path}: {e}")
+        # Return minimal info to prevent template errors
+        return {
+            'name': os.path.basename(file_path),
+            'path': file_path,
+            'relative_path': '',
+            'size': 0,
+            'formatted_size': '0 B',
+            'modified': 0,
+            'is_dir': False
+        }
 
 # Web Interface
 @app.route('/')
+@app.route('/browse/')
+@app.route('/browse/<path:subpath>')
 @login_required
-def index():
+def index(subpath=''):
     # Trigger device discovery in the background
     discovery_thread = threading.Thread(target=discover_devices)
     discovery_thread.daemon = True
     discovery_thread.start()
     
-    # Get list of files in shared folder
+    # Normalize the subpath and handle Windows paths
+    subpath = subpath.strip('/').replace('\\', '/')
+    
+    # Build the full path and ensure it's within the shared folder
+    current_path = os.path.normpath(os.path.join(SHARED_FOLDER, subpath)).replace('\\', '/')
+    
+    # Security check to prevent directory traversal
+    shared_folder_abs = os.path.abspath(SHARED_FOLDER).replace('\\', '/')
+    current_path_abs = os.path.abspath(current_path).replace('\\', '/')
+    
+    if not current_path_abs.startswith(shared_folder_abs):
+        abort(403)  # Forbidden
+    
+    # Check if the path exists and is a directory
+    if not os.path.exists(current_path_abs):
+        abort(404)  # Not found
+        
+    if not os.path.isdir(current_path_abs):
+        # If it's a file, serve it directly
+        rel_path = os.path.relpath(current_path_abs, SHARED_FOLDER).replace('\\', '/')
+        return download_file(rel_path)
+    
+    # Get list of files and directories in the current path
     files = []
+    breadcrumbs = [{'name': 'Ana Dizin', 'path': ''}]
+    
     try:
-        for item in os.listdir(SHARED_FOLDER):
-            item_path = os.path.join(SHARED_FOLDER, item)
-            files.append(get_file_info(item_path))
+        # Build breadcrumbs
+        if subpath:
+            path_parts = subpath.split('/')
+            current_breadcrumb_path = ''
+            
+            for part in path_parts:
+                if not part:
+                    continue
+                if current_breadcrumb_path:
+                    current_breadcrumb_path = f"{current_breadcrumb_path}/{part}"
+                else:
+                    current_breadcrumb_path = part
+                breadcrumbs.append({'name': part, 'path': current_breadcrumb_path})
+        
+        # List directory contents
+        for item in sorted(os.listdir(current_path_abs)):
+            item_path = os.path.join(current_path_abs, item).replace('\\', '/')
+            if os.path.isfile(item_path) or os.path.isdir(item_path):
+                files.append(get_file_info(item_path, current_path_abs))
+        
+        # Sort: directories first, then files, both alphabetically
+        files.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
+        
     except Exception as e:
         print(f"Error listing files: {e}")
+        abort(500)  # Internal Server Error
     
     # Get local IP for sharing
     local_ip = get_local_ip()
@@ -288,7 +437,9 @@ def index():
                          files=files, 
                          local_ip=local_ip, 
                          port=port,
-                         public_ip=PUBLIC_IP or 'Not available')
+                         public_ip=PUBLIC_IP or 'Not available',
+                         current_path=subpath,
+                         breadcrumbs=breadcrumbs)
 
 @app.route('/view/<path:filename>')
 @login_required
@@ -543,6 +694,11 @@ def discover_devices():
                 
                 # Add to discovered devices
                 DEVICES[device_name] = Device(device_name, address, port, [])
+                
+        def update_service(self, zeroconf, type, name):
+            # This method is required by the interface but we don't need to do anything special
+            # when a service is updated. We'll just log it for debugging purposes.
+            print(f"Service {name} updated")
     
     zeroconf = Zeroconf()
     listener = MyListener()

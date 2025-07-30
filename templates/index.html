@@ -1,5 +1,32 @@
 {% extends "base.html" %}
 
+{% macro file_icon(filename, is_dir) %}
+    {% if is_dir %}
+        <i class="bi bi-folder-fill text-warning"></i>
+    {% else %}
+        {% set ext = filename.split('.')|last|lower %}
+        {% if ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'] %}
+            <i class="bi bi-file-earmark-image-fill text-primary"></i>
+        {% elif ext in ['pdf'] %}
+            <i class="bi bi-file-earmark-pdf-fill text-danger"></i>
+        {% elif ext in ['doc', 'docx'] %}
+            <i class="bi bi-file-earmark-word-fill text-primary"></i>
+        {% elif ext in ['xls', 'xlsx'] %}
+            <i class="bi bi-file-earmark-excel-fill text-success"></i>
+        {% elif ext in ['ppt', 'pptx'] %}
+            <i class="bi bi-file-earmark-ppt-fill text-warning"></i>
+        {% elif ext in ['zip', 'rar', '7z', 'tar', 'gz'] %}
+            <i class="bi bi-file-earmark-zip-fill text-secondary"></i>
+        {% elif ext in ['mp3', 'wav', 'ogg'] %}
+            <i class="bi bi-file-earmark-music-fill text-info"></i>
+        {% elif ext in ['mp4', 'avi', 'mov', 'wmv', 'flv'] %}
+            <i class="bi bi-file-earmark-play-fill text-danger"></i>
+        {% else %}
+            <i class="bi bi-file-earmark-text"></i>
+        {% endif %}
+    {% endif %}
+{% endmacro %}
+
 {% block content %}
 <div class="row">
     <div class="col-md-10 offset-md-1">
@@ -71,11 +98,33 @@
             </div>
         </div>
 
+        <!-- Breadcrumb Navigation -->
+        <nav aria-label="breadcrumb" class="mb-3">
+            <ol class="breadcrumb">
+                {% for crumb in breadcrumbs %}
+                    <li class="breadcrumb-item {% if loop.last %}active" aria-current="page{% endif %}">
+                        {% if not loop.last %}
+                            <a href="{{ url_for('index', subpath=crumb.path) }}">
+                                {{ crumb.name }}
+                            </a>
+                        {% else %}
+                            {{ crumb.name }}
+                        {% endif %}
+                    </li>
+                {% endfor %}
+            </ol>
+        </nav>
+
         <!-- File List -->
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">
-                    <i class="bi bi-files"></i> Paylaşılan Dosyalar
+                    <i class="bi bi-files"></i> 
+                    {% if breadcrumbs|length > 1 %}
+                        {{ breadcrumbs[-1]['name'] }}
+                    {% else %}
+                        Paylaşılan Dosyalar
+                    {% endif %}
                 </h5>
                 <div class="form-check form-switch">
                     <input class="form-check-input" type="checkbox" id="autoRefresh" checked>
@@ -95,34 +144,54 @@
                                 </tr>
                             </thead>
                             <tbody>
+                                <!-- Go up directory link -->
+                                {% if current_path %}
+                                    <tr>
+                                        <td colspan="4">
+                                            <a href="{{ url_for('index', subpath=breadcrumbs[-2].path if breadcrumbs|length > 1 else '') }}" class="text-decoration-none">
+                                                <i class="bi bi-folder-symlink"></i> Üst Dizine Git
+                                            </a>
+                                        </td>
+                                    </tr>
+                                {% endif %}
+                                
                                 {% for file in files %}
                                     <tr>
                                         <td>
-                                            <i class="bi bi-{{ 'file-earmark' if not file.is_dir else 'folder' }}"></i>
-                                            {{ file.name }}
+                                            <a href="{% if file.is_dir %}{{ url_for('index', subpath=file.relative_path) }}{% else %}#{% endif %}" class="text-decoration-none {% if not file.is_dir %}text-dark{% endif %}">
+                                                {{ file_icon(file.name, file.is_dir) }} {{ file.name }}
+                                            </a>
                                         </td>
                                         <td>
-                                            {% if not file.is_dir %}
-                                                {{ (file.size / 1024)|round(2) }} KB
+                                            {% if file.is_dir %}
+                                                {% if file.size > 0 %}{{ file.formatted_size }}{% else %}-{% endif %}
                                             {% else %}
-                                                -
+                                                {{ file.formatted_size }}
                                             {% endif %}
                                         </td>
                                         <td>{{ file.modified|datetime }}</td>
                                         <td>
                                             <div class="btn-group btn-group-sm">
                                                 {% if not file.is_dir %}
-                                                    <a href="{{ url_for('view_file', filename=file.name) }}" 
-                                                       class="btn btn-outline-primary" target="_blank">
-                                                        <i class="bi bi-eye"></i> Görüntüle
+                                                    {% set file_ext = file.name.split('.')|last|lower %}
+                                                    {% if file_ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'pdf'] %}
+                                                    <a href="{{ url_for('view_file', filename=file.relative_path) }}" 
+                                                       class="btn btn-outline-primary" target="_blank" title="Önizleme">
+                                                            <i class="bi bi-eye"></i> Önizle
                                                     </a>
-                                                    <a href="{{ url_for('download_file', filename=file.name) }}" 
+                                                    {% endif %}
+                                                    <a href="{{ url_for('download_file', filename=file.relative_path) }}" 
                                                        class="btn btn-outline-success">
                                                         <i class="bi bi-download"></i> İndir
                                                     </a>
+                                                {% else %}
+                                                    <a href="{{ url_for('index', subpath=file.relative_path) }}" 
+                                                       class="btn btn-outline-primary">
+                                                        <i class="bi bi-folder2-open"></i> Aç
+                                                    </a>
                                                 {% endif %}
                                                 <button class="btn btn-outline-danger delete-file" 
-                                                        data-filename="{{ file.name }}">
+                                                        data-filename="{{ file.relative_path }}">
                                                     <i class="bi bi-trash"></i> Sil
                                                 </button>
                                             </div>
@@ -149,12 +218,15 @@
     function copyToClipboard(elementId) {
         const copyText = document.getElementById(elementId);
         copyText.select();
-        copyText.setSelectionRange(0, 99999);
-        document.execCommand("copy");
+        copyText.setSelectionRange(0, 99999); // For mobile devices
+        document.execCommand('copy');
         
-        // Show tooltip or alert
+        // Show tooltip or feedback
         const originalText = copyText.value;
-        alert("Bağlantı panoya kopyalandı: " + originalText);
+        copyText.value = 'Kopyalandı!';
+        setTimeout(() => {
+            copyText.value = originalText;
+        }, 2000);
     }
 
     // Auto refresh file list
@@ -163,36 +235,59 @@
     
     function refreshFileList() {
         if (autoRefreshCheckbox.checked) {
-            location.reload();
+            window.location.reload();
         }
     }
     
-    // Set up auto-refresh every 30 seconds
-    document.addEventListener('DOMContentLoaded', function() {
-        refreshInterval = setInterval(refreshFileList, 30000);
-        
-        // Handle delete file buttons
+    // Handle file deletion
+    function setupDeleteButtons() {
         document.querySelectorAll('.delete-file').forEach(button => {
-            button.addEventListener('click', function() {
+            // Remove any existing event listeners
+            const newButton = button.cloneNode(true);
+            button.parentNode.replaceChild(newButton, button);
+            
+            newButton.addEventListener('click', function() {
                 const filename = this.getAttribute('data-filename');
-                if (confirm(`"${filename}" adlı dosyayı silmek istediğinize emin misiniz?`)) {
+                const isDirectory = this.closest('tr').querySelector('.bi-folder') !== null;
+                const itemType = isDirectory ? 'klasör' : 'dosya';
+                
+                if (confirm(`"${filename}" ${itemType}sını silmek istediğinize emin misiniz?`)) {
                     fetch(`/delete/${encodeURIComponent(filename)}`, {
-                        method: 'DELETE'
+                        method: 'DELETE',
                     })
                     .then(response => response.json())
                     .then(data => {
                         if (data.success) {
-                            location.reload();
+                            window.location.reload();
                         } else {
-                            alert('Dosya silinirken bir hata oluştu: ' + (data.error || 'Bilinmeyen hata'));
+                            alert(`Silme hatası: ${data.error || 'Bilinmeyen hata'}`);
                         }
                     })
                     .catch(error => {
                         console.error('Error:', error);
-                        alert('Dosya silinirken bir hata oluştu.');
+                        alert('Bir hata oluştu. Lütfen daha sonra tekrar deneyin.');
                     });
                 }
             });
+        });
+    }
+    
+    // Set up auto-refresh and event listeners when the page loads
+    document.addEventListener('DOMContentLoaded', function() {
+        // Set up delete buttons
+        setupDeleteButtons();
+        
+        // Set up auto-refresh
+        refreshInterval = setInterval(refreshFileList, 30000);
+        
+        // Toggle auto-refresh when checkbox changes
+        autoRefreshCheckbox.addEventListener('change', function() {
+            if (this.checked) {
+                refreshFileList();
+                refreshInterval = setInterval(refreshFileList, 30000);
+            } else {
+                clearInterval(refreshInterval);
+            }
         });
     });
     
