@@ -1,0 +1,120 @@
+2025-08-05 22:28:48,750 ERROR: Exception on /favicon.ico [GET] [in C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py:875]
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\routing\map.py", line 629, in match
+    raise NotFound() from None
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 802, in handle_user_exception
+    return self.handle_http_exception(e)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 777, in handle_http_exception
+    return self.ensure_sync(handler)(e)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\app.py", line 107, in not_found_error
+    import logging
+               ^^^
+NameError: name 'render_template' is not defined
+2025-08-05 22:28:48,759 ERROR: 500 Error: 500 Internal Server Error: The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application. [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:111]
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\routing\map.py", line 629, in match
+    raise NotFound() from None
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 802, in handle_user_exception
+    return self.handle_http_exception(e)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 777, in handle_http_exception
+    return self.ensure_sync(handler)(e)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\app.py", line 107, in not_found_error
+    import logging
+               ^^^
+NameError: name 'render_template' is not defined
+2025-08-05 22:28:57,957 INFO: Disk Management startup [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:123]
+2025-08-05 22:28:57,958 DEBUG: Configuration: HOST_IP=0.0.0.0 [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:126]
+2025-08-05 22:28:57,958 DEBUG: Configuration: PORT=Not set [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:127]
+2025-08-05 22:28:57,959 DEBUG: Configuration: SHARED_FOLDER=C:\Users\Sarýý\Downloads\DiskStorage [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:128]
+2025-08-05 22:28:57,959 DEBUG: Configuration: DEBUG_MODE=Not set [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:129]
+2025-08-05 22:29:32,687 ERROR: 404 Error: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again. [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:106]
+2025-08-05 22:29:32,688 ERROR: Exception on /health [GET] [in C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py:875]
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 891, in dispatch_request
+    self.raise_routing_exception(req)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 500, in raise_routing_exception
+    raise request.routing_exception  # type: ignore[misc]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\ctx.py", line 362, in match_request
+    result = self.url_adapter.match(return_rule=True)  # type: ignore
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\routing\map.py", line 629, in match
+    raise NotFound() from None
+werkzeug.exceptions.NotFound: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 802, in handle_user_exception
+    return self.handle_http_exception(e)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 777, in handle_http_exception
+    return self.ensure_sync(handler)(e)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\app.py", line 107, in not_found_error
+    import logging
+               ^^^
+NameError: name 'render_template' is not defined
+2025-08-05 22:29:32,772 ERROR: 404 Error: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again. [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:106]
+2025-08-05 22:29:56,690 ERROR: 404 Error: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again. [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:106]
+2025-08-05 22:29:57,003 ERROR: 404 Error: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again. [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:106]
+2025-08-05 22:35:15,602 INFO: Disk Management startup [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:132]
+2025-08-05 22:35:15,602 DEBUG: Configuration: HOST_IP=0.0.0.0 [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:135]
+2025-08-05 22:35:15,603 DEBUG: Configuration: PORT=Not set [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:136]

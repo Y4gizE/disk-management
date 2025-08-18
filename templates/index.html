@@ -145,9 +145,30 @@
                         <table class="table table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
-                                    <th class="w-50">Dosya Adı</th>
-                                    <th class="text-end">Boyut</th>
-                                    <th>Değiştirilme Tarihi</th>
+                                    <th class="w-40">
+                                        <a href="#" class="text-decoration-none text-dark sort-header" data-sort="name">
+                                            Dosya Adı 
+                                            <i class="bi bi-arrow-down-up sort-icon" data-sort="name"></i>
+                                        </a>
+                                    </th>
+                                    <th class="text-end">
+                                        <a href="#" class="text-decoration-none text-dark sort-header" data-sort="size">
+                                            Boyut 
+                                            <i class="bi bi-arrow-down-up sort-icon" data-sort="size"></i>
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="#" class="text-decoration-none text-dark sort-header" data-sort="type">
+                                            Tür
+                                            <i class="bi bi-arrow-down-up sort-icon" data-sort="type"></i>
+                                        </a>
+                                    </th>
+                                    <th>
+                                        <a href="#" class="text-decoration-none text-dark sort-header" data-sort="date">
+                                            Değiştirilme Tarihi
+                                            <i class="bi bi-arrow-down-up sort-icon" data-sort="date"></i>
+                                        </a>
+                                    </th>
                                     <th class="text-center">İşlemler</th>
                                 </tr>
                             </thead>
@@ -165,12 +186,12 @@
                                 
                                 {% for file in files %}
                                     <tr>
-                                        <td>
+                                        <td data-sort="{{ file.name|lower }}">
                                             <a href="{% if file.is_dir %}{{ url_for('index', subpath=file.relative_path) }}{% else %}#{% endif %}" class="text-decoration-none {% if not file.is_dir %}text-dark{% endif %}">
                                                 {{ file_icon(file.name, file.is_dir) }} {{ file.name }}
                                             </a>
                                         </td>
-                                        <td class="text-nowrap text-end">
+                                        <td class="text-nowrap text-end" data-sort="{{ file.size if not file.is_dir else -1 }}">
                                             {% if file.is_dir %}
                                                 {% if file.size > 0 %}
                                                     <span class="badge bg-light text-dark">{{ file.formatted_size }}</span>
@@ -181,12 +202,45 @@
                                                 <span class="badge bg-light text-dark">{{ file.formatted_size }}</span>
                                             {% endif %}
                                         </td>
-                                        <td class="text-nowrap">
+                                        <td class="text-nowrap" data-sort="{{ file.name.split('.')[-1].lower() if '.' in file.name else '' }}">
+                                            {% if file.is_dir %}
+                                                Klasör
+                                            {% else %}
+                                                {% set ext = file.name.split('.')[-1].lower() if '.' in file.name else '' %}
+                                                {% if ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'] %}
+                                                    Resim
+                                                {% elif ext in ['pdf'] %}
+                                                    PDF
+                                                {% elif ext in ['doc', 'docx'] %}
+                                                    Word
+                                                {% elif ext in ['xls', 'xlsx'] %}
+                                                    Excel
+                                                {% elif ext in ['ppt', 'pptx'] %}
+                                                    PowerPoint
+                                                {% elif ext in ['zip', 'rar', '7z', 'tar', 'gz'] %}
+                                                    Arşiv
+                                                {% elif ext in ['txt', 'md', 'ini', 'conf', 'log'] %}
+                                                    Metin
+                                                {% elif ext in ['mp3', 'wav', 'ogg', 'flac'] %}
+                                                    Ses
+                                                {% elif ext in ['mp4', 'avi', 'mov', 'mkv', 'webm'] %}
+                                                    Video
+                                                {% else %}
+                                                    Diğer
+                                                {% endif %}
+                                            {% endif %}
+                                        </td>
+                                        <td class="text-nowrap" data-sort="{% if file.modified %}{% if file.modified.__class__.__name__ in ['datetime', 'datetime.datetime'] %}{{ file.modified.timestamp() }}{% else %}{{ file.modified }}{% endif %}{% else %}0{% endif %}">
                                             <span class="small text-muted">{{ file.modified|datetime }}</span>
                                         </td>
                                         <td class="text-center">
                                             <div class="btn-group btn-group-sm">
-                                                {% if not file.is_dir %}
+                                                {% if file.is_dir %}
+                                                    <a href="{{ url_for('index', subpath=file.relative_path) }}" 
+                                                       class="btn btn-outline-primary">
+                                                        <i class="bi bi-folder2-open"></i> Aç
+                                                    </a>
+                                                {% else %}
                                                     {% set file_ext = file.name.split('.')|last|lower %}
                                                     {% if file_ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'] %}
                                                     <a href="{{ url_for('view_image_route', filename=file.relative_path) }}" 
@@ -209,16 +263,11 @@
                                                             <i class="bi bi-file-earmark-text"></i> Görüntüle
                                                     </a>
                                                     {% endif %}
-                                                    <a href="{{ url_for('download_file', filename=file.relative_path) }}" 
-                                                       class="btn btn-outline-success">
-                                                        <i class="bi bi-download"></i> İndir
-                                                    </a>
-                                                {% else %}
-                                                    <a href="{{ url_for('index', subpath=file.relative_path) }}" 
-                                                       class="btn btn-outline-primary">
-                                                        <i class="bi bi-folder2-open"></i> Aç
-                                                    </a>
                                                 {% endif %}
+                                                <a href="{{ url_for('download_file', filename=file.relative_path) }}" 
+                                                   class="btn btn-outline-success">
+                                                    <i class="bi bi-download"></i> İndir
+                                                </a>
                                                 <button class="btn btn-outline-danger delete-file" 
                                                         data-filename="{{ file.relative_path }}">
                                                     <i class="bi bi-trash"></i> Sil
@@ -301,10 +350,104 @@
         });
     }
     
+    // Function to sort the table
+    function sortTable(column, direction) {
+        const tbody = document.querySelector('table tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr:not(.table-light)'));
+        
+        // Sort the rows based on the column and direction
+        rows.sort((a, b) => {
+            let aValue, bValue;
+            const aCell = a.cells[column === 'name' ? 0 : column === 'size' ? 1 : column === 'type' ? 2 : 3];
+            const bCell = b.cells[column === 'name' ? 0 : column === 'size' ? 1 : column === 'type' ? 2 : 3];
+            
+            if (column === 'name') {
+                aValue = aCell.textContent.trim().toLowerCase();
+                bValue = bCell.textContent.trim().toLowerCase();
+                return direction === 'asc' ? 
+                    aValue.localeCompare(bValue) : 
+                    bValue.localeCompare(aValue);
+                    
+            } else if (column === 'size') {
+                aValue = parseFloat(aCell.getAttribute('data-sort') || 0);
+                bValue = parseFloat(bCell.getAttribute('data-sort') || 0);
+                return direction === 'asc' ? aValue - bValue : bValue - aValue;
+                
+            } else if (column === 'type') {
+                aValue = aCell.textContent.trim().toLowerCase();
+                bValue = bCell.textContent.trim().toLowerCase();
+                return direction === 'asc' ? 
+                    aValue.localeCompare(bValue) : 
+                    bValue.localeCompare(aValue);
+                    
+            } else if (column === 'date') {
+                aValue = parseFloat(aCell.getAttribute('data-sort') || 0);
+                bValue = parseFloat(bCell.getAttribute('data-sort') || 0);
+                return direction === 'asc' ? aValue - bValue : bValue - aValue;
+            }
+            
+            return 0;
+        });
+        
+        // Rebuild the table
+        const parentRow = tbody.querySelector('tr.table-light');
+        if (parentRow) {
+            tbody.innerHTML = '';
+            tbody.appendChild(parentRow);
+        } else {
+            tbody.innerHTML = '';
+        }
+        
+        rows.forEach(row => tbody.appendChild(row));
+    }
+
     // Set up auto-refresh and event listeners when the page loads
     document.addEventListener('DOMContentLoaded', function() {
         // Set up delete buttons
         setupDeleteButtons();
+        
+        // Set up sorting
+        const headers = document.querySelectorAll('.sort-header');
+        
+        headers.forEach(header => {
+            header.addEventListener('click', function(e) {
+                e.preventDefault();
+                
+                const column = this.getAttribute('data-sort');
+                let direction = 'asc';
+                
+                // Toggle direction if clicking the same column
+                if (this.classList.contains('active')) {
+                    direction = this.classList.contains('asc') ? 'desc' : 'asc';
+                }
+                
+                // Update UI
+                headers.forEach(h => {
+                    h.classList.remove('active', 'asc', 'desc');
+                });
+                
+                this.classList.add('active', direction);
+                
+                // Sort the table
+                sortTable(column, direction);
+                
+                // Save sort preference
+                localStorage.setItem('fileSortColumn', column);
+                localStorage.setItem('fileSortDirection', direction);
+            });
+        });
+        
+        // Apply saved sort preference
+        const savedColumn = localStorage.getItem('fileSortColumn');
+        const savedDirection = localStorage.getItem('fileSortDirection');
+        
+        if (savedColumn && savedDirection) {
+            const header = document.querySelector(`.sort-header[data-sort="${savedColumn}"]`);
+            if (header) {
+                header.classList.add('active', savedDirection);
+                sortTable(savedColumn, savedDirection);
+            }
+        }
         
         // Set up auto-refresh
         refreshInterval = setInterval(refreshFileList, 30000);

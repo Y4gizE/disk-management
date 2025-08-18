@@ -25,6 +25,19 @@
     <div class="container">
         <header class="mb-4">
             <h1 class="text-center">Dağıtık Depolama Sistemi</h1>
+            <div class="text-center mb-2">
+                <span class="badge bg-primary">
+                    <i class="bi bi-pc-display"></i> Yerel IP: {{ local_ip }}
+                </span>
+                {% if public_ip %}
+                <span class="badge bg-success ms-2">
+                    <i class="bi bi-globe"></i> Genel IP: {{ public_ip }}
+                </span>
+                {% endif %}
+                <span class="badge bg-secondary ms-2">
+                    <i class="bi bi-hdd-rack"></i> Port: {{ port }}
+                </span>
+            </div>
             <nav class="nav justify-content-center">
                 <a class="nav-link" href="{{ url_for('index') }}">Ana Sayfa</a>
                 <a class="nav-link" href="{{ url_for('register_device_ui') }}">Yeni Cihaz Ekle</a>

@@ -1,0 +1,14 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.rar
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./shared:/app/shared
+      - ./:/app
+    environment:
+      - FLASK_DEBUG=1
+      - SHARED_FOLDER=/app/shared
+    restart: unless-stopped

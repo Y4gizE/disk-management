@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-4">
+            <div class="card shadow">
+                <div class="card-body">
+                    <h2 class="text-center mb-4">Giriş Yap</h2>
+                    {% with messages = get_flashed_messages(with_categories=true) %}
+                        {% if messages %}
+                            {% for category, message in messages %}
+                                <div class="alert alert-{{ category }}">{{ message }}</div>
+                            {% endfor %}
+                        {% endif %}
+                    {% endwith %}
+                    <form method="post">
+                        {% if form %}
+                            {{ form.hidden_tag() }}
+                            <div class="mb-3">
+                                {{ form.password.label(class="form-label") }}
+                                {{ form.password(class="form-control") }}
+                                {% if form.password.errors %}
+                                    {% for error in form.password.errors %}
+                                        <div class="invalid-feedback d-block">{{ error }}</div>
+                                    {% endfor %}
+                                {% endif %}
+                            </div>
+                            <div class="d-grid">
+                                {{ form.submit(class="btn btn-primary") }}
+                            </div>
+                        {% else %}
+                            <div class="mb-3">
+                                <label for="password" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="password" name="password" required>
+                            </div>
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary">Login</button>
+                            </div>
+                        {% endif %}
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

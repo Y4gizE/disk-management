@@ -8,14 +8,16 @@ import zipfile
 import rarfile
 import requests
 import threading
-import time
 import subprocess
 import magic
 import argparse
 import shutil
-import subprocess
+import psutil
 from datetime import datetime
 from functools import wraps
+from typing import List, Dict, Any, Optional, Union
+from pathlib import Path
+
 from flask import Flask, render_template, request, redirect, url_for, flash, send_from_directory, session, abort, jsonify, send_file
 from flask_cors import CORS
 from werkzeug.utils import secure_filename
@@ -23,12 +25,17 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.serving import run_simple
 from werkzeug.middleware.dispatcher import DispatcherMiddleware
 from werkzeug.middleware.proxy_fix import ProxyFix
-from dotenv import load_dotenv
 from watchdog.observers import Observer
 from watchdog.events import FileSystemEventHandler
-import threading
-import psutil
-import requests
+from zeroconf import ServiceInfo, Zeroconf, IPVersion
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Import config after environment variables are loaded
+from config import Config
+
 try:
     import netifaces
     NETIFACES_AVAILABLE = True
@@ -36,46 +43,37 @@ except ImportError:
     NETIFACES_AVAILABLE = False
     print("Warning: netifaces not available. Some network features may be limited.")
 
+# Global variable for public IP
+PUBLIC_IP = None
+
 # RAR Processor configuration
-RAR_PROCESSOR_ENABLED = False
-RAR_PROCESSOR_URL = "http://localhost:5001"
+RAR_PROCESSOR_ENABLED = os.environ.get('RAR_PROCESSOR_ENABLED', 'false').lower() == 'true'
+RAR_PROCESSOR_URL = os.environ.get('RAR_PROCESSOR_URL', 'http://localhost:5001')
 RAR_PROCESSOR_CONTAINER_NAME = "rar-processor"
 
 def check_rar_processor():
-    """Check if the RAR processor service is running and start it if needed."""
+    """Check if the RAR processor service is running and accessible."""
     global RAR_PROCESSOR_ENABLED
-    try:
-        # Check if the container is already running
-        result = subprocess.run(
-            ["docker", "inspect", "--format='{{.State.Running}}'", RAR_PROCESSOR_CONTAINER_NAME],
-            capture_output=True,
-            text=True
-        )
+    
+    if not RAR_PROCESSOR_ENABLED:
+        print("RAR processor is disabled by configuration")
+        return False
         
-        if result.returncode == 0 and 'true' in result.stdout:
-            RAR_PROCESSOR_ENABLED = True
-            print("RAR processor container is already running")
+    try:
+        # Check if the RAR processor is accessible
+        response = requests.get(f"{RAR_PROCESSOR_URL}/health", timeout=2)
+        if response.status_code == 200:
+            print("RAR processor is running and accessible")
             return True
             
-        # If not running, try to start it
-        print("Starting RAR processor container...")
-        subprocess.run([
-            "docker", "start", RAR_PROCESSOR_CONTAINER_NAME
-        ], check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    except requests.exceptions.RequestException as e:
+        print(f"RAR processor is not accessible: {str(e)}")
         
-        # Wait for the container to start
-        time.sleep(2)
-        RAR_PROCESSOR_ENABLED = True
-        print("RAR processor container started successfully")
-        return True
-        
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to start RAR processor container. Please run 'start_rar_processor.bat' first.")
-        print(f"Error: {e.stderr}" if e.stderr else f"Error: {e}")
-        RAR_PROCESSOR_ENABLED = False
-        return False
+    RAR_PROCESSOR_ENABLED = False
+    print("RAR processor is not available. Some features may be limited.")
+    return False
 
-def get_archive_contents_docker(archive_path):
+def get_archive_contents_docker(archive_path, subpath=''):
     """Get archive contents using the Docker-based RAR processor."""
     try:
         # Convert to relative path for the container
@@ -84,7 +82,10 @@ def get_archive_contents_docker(archive_path):
         
         response = requests.post(
             f"{RAR_PROCESSOR_URL}/list",
-            json={"file_path": container_path},
+            json={
+                "file_path": container_path,
+                "subpath": subpath  # Pass the subpath to the processor
+            },
             timeout=10
         )
         
@@ -102,6 +103,8 @@ def get_archive_contents_docker(archive_path):
         
     except requests.exceptions.RequestException as e:
         print(f"Error communicating with RAR processor: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
 from zeroconf import ServiceInfo, Zeroconf, IPVersion
@@ -109,9 +112,6 @@ from typing import List, Dict, Any, Optional, Union
 import io
 import tempfile
 from pathlib import Path
-
-# Load environment variables
-load_dotenv()
 
 # Constants
 SHARED_FOLDER = os.path.join(str(Path.home()), 'Downloads', 'DiskStorage')
@@ -127,6 +127,19 @@ app = Flask(__name__, template_folder='templates')
 CORS(app)
 app.secret_key = os.urandom(24)  # For flash messages
 app.config['PASSWORD_HASH'] = generate_password_hash('1234')  # Default password hash
+
+# Global error handler
+@app.errorhandler(Exception)
+def handle_exception(e):
+    import traceback
+    error_trace = traceback.format_exc()
+    print(f"\n=== ERROR ===\n{error_trace}\n==========\n")
+    return f"""
+    <h1>500 Internal Server Error</h1>
+    <h3>{str(e)}</h3>
+    <pre>{error_trace}</pre>
+    <p><a href="{url_for('index')}">Return to home page</a></p>
+    """, 500
 
 # Authentication decorator
 def login_required(f):
@@ -242,7 +255,7 @@ def upload_file():
 @app.route('/download/<path:filename>', methods=['GET'])
 @login_required
 def download_file(filename):
-    """Download a file from shared storage"""
+    """Download a file or folder from shared storage"""
     # Normalize the filename and handle Windows paths
     filename = filename.strip('/').replace('\\', '/')
     filepath = os.path.normpath(os.path.join(SHARED_FOLDER, filename)).replace('\\', '/')
@@ -251,18 +264,51 @@ def download_file(filename):
     shared_folder_abs = os.path.abspath(SHARED_FOLDER).replace('\\', '/')
     filepath_abs = os.path.abspath(filepath).replace('\\', '/')
     
-    if not filepath_abs.startswith(shared_folder_abs) or not os.path.isfile(filepath_abs):
-        flash('Dosya bulunamadı', 'error')
+    if not filepath_abs.startswith(shared_folder_abs):
+        flash('Geçersiz dosya yolu', 'error')
         return redirect(url_for('index'))
     
     try:
-        return send_file(
-            filepath_abs,
-            as_attachment=True,
-            download_name=os.path.basename(filepath_abs)
-        )
+        if os.path.isfile(filepath_abs):
+            # Handle file download
+            return send_file(
+                filepath_abs,
+                as_attachment=True,
+                download_name=os.path.basename(filepath_abs)
+            )
+        elif os.path.isdir(filepath_abs):
+            # Create a temporary file for the zip
+            temp_file = io.BytesIO()
+            
+            # Create a zip file in memory
+            with zipfile.ZipFile(temp_file, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                base_name = os.path.basename(filepath_abs.rstrip(os.sep))
+                
+                # Walk through the directory and add files to the zip
+                for root, dirs, files in os.walk(filepath_abs):
+                    for file in files:
+                        file_path = os.path.join(root, file)
+                        # Calculate the relative path for the zip file
+                        rel_path = os.path.relpath(file_path, os.path.dirname(filepath_abs))
+                        zipf.write(file_path, rel_path)
+            
+            # Move to the beginning of the BytesIO object
+            temp_file.seek(0)
+            
+            # Send the zip file
+            return send_file(
+                temp_file,
+                as_attachment=True,
+                download_name=f"{base_name}.zip",
+                mimetype='application/zip'
+            )
+        else:
+            flash('Dosya veya klasör bulunamadı', 'error')
+            return redirect(url_for('index'))
+            
     except Exception as e:
         flash(f'Dosya indirilirken hata oluştu: {str(e)}', 'error')
+        return redirect(url_for('index'))
         return redirect(url_for('index'))
 
 @app.route('/delete/<path:filename>', methods=['DELETE'])
@@ -294,13 +340,26 @@ def delete_file(filename):
 def format_datetime(timestamp, format='%d.%m.%Y %H:%M:%S'):
     if timestamp is None:
         return "-"
-    return datetime.fromtimestamp(timestamp).strftime(format)
+    try:
+        # If timestamp is already a datetime object, format it directly
+        if hasattr(timestamp, 'strftime'):
+            return timestamp.strftime(format)
+        # If timestamp is a string, try to convert it to float first
+        if isinstance(timestamp, str):
+            try:
+                timestamp = float(timestamp)
+            except (ValueError, TypeError):
+                return str(timestamp)  # Return as is if can't convert to number
+        # Convert timestamp to datetime and format
+        return datetime.fromtimestamp(float(timestamp)).strftime(format)
+    except (ValueError, TypeError) as e:
+        print(f"Error formatting timestamp {timestamp}: {e}")
+        return str(timestamp)  # Return original value if conversion fails
 
 # Global variables
 DEVICES = {}
 SHARED_FOLDERS = {}
 HOST_IP = '0.0.0.0'
-PUBLIC_IP = None
 RELAY_SERVERS = [
     {'url': 'http://relay1.example.com:5000', 'status': 'unknown'},
     {'url': 'http://relay2.example.com:5000', 'status': 'unknown'}
@@ -337,23 +396,23 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# Import the LoginForm at the top of the file with other imports
+from forms import LoginForm
+
 # Authentication routes
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if request.method == 'POST':
-        password = request.form.get('password')
-        if check_password_hash(app.config['PASSWORD_HASH'], password):
+    form = LoginForm()
+    
+    if form.validate_on_submit():
+        if check_password_hash(app.config['PASSWORD_HASH'], form.password.data):
             session['authenticated'] = True
+            session.permanent = True  # Make the session permanent
             next_page = request.args.get('next')
             return redirect(next_page or url_for('index'))
         flash('Invalid password', 'error')
-    return '''
-        <form method="post">
-            <h2>Enter Password</h2>
-            <input type="password" name="password" required>
-            <button type="submit">Login</button>
-        </form>
-    '''
+    
+    return render_template('auth/login.html', form=form)
 
 @app.route('/logout')
 def logout():
@@ -436,6 +495,201 @@ def build_directory_structure(entries):
     
     return root
 
+def get_zip_contents(archive_path: str, subpath: str = '') -> Optional[Dict[str, Any]]:
+    """
+    Get contents of a ZIP archive with hierarchical structure.
+    
+    Args:
+        archive_path: Path to the ZIP file
+        subpath: Path within the archive to list contents for
+        
+    Returns:
+        Dict containing archive metadata and contents, or None if there's an error
+    """
+    if not os.path.isfile(archive_path):
+        print(f"ZIP file not found: {archive_path}")
+        return None
+    
+    try:
+        entries = []
+        dir_structure = {'name': '', 'path': '', 'children': []}
+        breadcrumbs = []
+        
+        with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+            for item in zip_ref.infolist():
+                try:
+                    # Skip directories (we'll handle them from the paths)
+                    if item.filename.endswith('/'):
+                        continue
+                        
+                    # Get relative path and check if it's in the current subpath
+                    rel_path = item.filename.replace('\\', '/').rstrip('/')
+                    if subpath and not (rel_path == subpath or rel_path.startswith(f"{subpath}/")):
+                        continue
+                        
+                    # Calculate the path relative to the current subpath
+                    display_path = rel_path[len(subpath)+1:] if subpath else rel_path
+                    path_parts = display_path.split('/')
+                    
+                    # Add directory entries for the path
+                    current_path = []
+                    for part in path_parts[:-1]:  # All but the last part are directories
+                        current_path.append(part)
+                        dir_path = '/'.join(current_path)
+                        
+                        # Check if we've already added this directory
+                        if not any(e['path'] == dir_path for e in entries):
+                            # Convert datetime to timestamp safely
+                            if hasattr(item, 'date_time') and item.date_time and len(item.date_time) >= 6:
+                                try:
+                                    dt = datetime(*item.date_time[:6])
+                                    modified = int(dt.timestamp())
+                                except (TypeError, ValueError):
+                                    modified = 0
+                            else:
+                                modified = 0
+                                
+                            entries.append({
+                                'name': part,
+                                'path': f"{subpath}/{dir_path}" if subpath else dir_path,
+                                'size': 0,
+                                'modified': modified,
+                                'is_dir': True
+                            })
+                    
+                    # Add the file entry with safe datetime conversion
+                    if hasattr(item, 'date_time') and item.date_time and len(item.date_time) >= 6:
+                        try:
+                            dt = datetime(*item.date_time[:6])
+                            modified = int(dt.timestamp())
+                        except (TypeError, ValueError):
+                            modified = 0
+                    else:
+                        modified = 0
+                        
+                    file_entry = {
+                        'name': path_parts[-1],
+                        'path': rel_path,
+                        'size': item.file_size,
+                        'compressed_size': item.compress_size,
+                        'modified': modified,
+                        'is_dir': False
+                    }
+                    entries.append(file_entry)
+                    
+                except Exception as e:
+                    print(f"Error processing ZIP entry {item.filename}: {str(e)}")
+                    continue
+        
+        # Build directory structure
+        for entry in entries:
+            path_parts = entry['path'].split('/')
+            current_level = dir_structure['children']
+            
+            for i, part in enumerate(path_parts):
+                existing = next((item for item in current_level if item['name'] == part), None)
+                
+                if existing is None:
+                    new_node = {
+                        'name': part,
+                        'path': '/'.join(path_parts[:i+1]),
+                        'size': entry.get('size', 0),
+                        'compressed_size': entry.get('compressed_size', 0),
+                        'modified': entry.get('modified', 0),
+                        'is_dir': entry.get('is_dir', False) or i < len(path_parts) - 1,
+                        'children': []
+                    }
+                    current_level.append(new_node)
+                    current_level = new_node['children']
+                else:
+                    current_level = existing['children']
+        
+        # Prepare breadcrumbs if we have a subpath
+        if subpath:
+            parts = subpath.split('/')
+            current_path = ''
+            for i, part in enumerate(parts):
+                if part:  # Skip empty parts
+                    current_path = current_path + '/' + part if current_path else part
+                    breadcrumbs.append({
+                        'name': part,
+                        'path': current_path,
+                        'is_last': i == len(parts) - 1
+                    })
+        
+        return {
+            'success': True,
+            'contents': dir_structure.get('children', []),
+            'file_count': len(entries),
+            'total_size': sum(e.get('size', 0) for e in entries if not e.get('is_dir')),
+            'is_rar': False,
+            'breadcrumbs': breadcrumbs,
+            'parent_path': os.path.dirname(subpath.rstrip('/')) if subpath else ''
+        }
+        
+    except Exception as e:
+        print(f"Error processing ZIP file: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def get_rar_contents(archive_path: str, subpath: str = '') -> Optional[Dict[str, Any]]:
+    """
+    Get contents of a RAR archive with hierarchical structure.
+    
+    Args:
+        archive_path: Path to the RAR file
+        subpath: Path within the archive to list contents for
+        
+    Returns:
+        Dict containing archive metadata and contents, or None if there's an error
+    """
+    if not os.path.isfile(archive_path):
+        print(f"RAR file not found: {archive_path}")
+        return None
+    
+    # First check if RAR processing is available
+    if not (Config.HAS_RARFILE or Config.HAS_UNRAR):
+        print("RAR desteği yok. Lütfen 'rarfile' veya 'unrar' kütüphanelerinden birini yükleyin.")
+        return None
+        
+    from services.rar_service import RarService
+    rar_service = RarService()
+    
+    try:
+        # Get archive contents using the service
+        result = rar_service.get_archive_contents(archive_path, subpath)
+        
+        if not result or not result.get('success'):
+            print(f"Failed to read RAR archive contents: {result}")
+            return None
+        
+        # Process the result to match our template format
+        contents = []
+        for item in result.get('contents', []):
+            contents.append({
+                'name': item.get('name', ''),
+                'size': item.get('size', 0),
+                'compressed_size': item.get('compressed_size', item.get('size', 0)),
+                'is_dir': item.get('is_dir', False),
+                'modified': item.get('date') or item.get('modified', 0),
+                'path': item.get('path', item.get('name', ''))
+            })
+        
+        return {
+            'success': True,
+            'contents': contents,
+            'file_count': len(contents),
+            'total_size': sum(f.get('size', 0) for f in contents),
+            'is_rar': True
+        }
+    
+    except Exception as e:
+        print(f"Error processing RAR file: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 def get_archive_contents(archive_path: str, subpath: str = '') -> Optional[Dict[str, Any]]:
     """
     Get contents of a ZIP or RAR archive with hierarchical structure.
@@ -452,294 +706,112 @@ def get_archive_contents(archive_path: str, subpath: str = '') -> Optional[Dict[
         return None
     
     try:
-        entries = []
-        total_size = 0
-        file_count = 0
-        is_rar = False
-        
-        # Normalize subpath (remove leading/trailing slashes)
-        subpath = subpath.strip('/')
-        
-        # Check if it's a RAR file
+        # Handle RAR files
         if archive_path.lower().endswith('.rar'):
-            is_rar = True
-            # Try using Docker RAR processor first
-            if check_rar_processor():
-                result = get_archive_contents_docker(archive_path)
-                if result:
-                    return result
-                print("Falling back to local RAR processing")
-            
-            # Fallback to local processing
-            try:
-                if not os.access(archive_path, os.R_OK):
-                    print(f"No read permissions for RAR file: {archive_path}")
-                    return None
-                    
-                file_size = os.path.getsize(archive_path)
-                if file_size == 0:
-                    print(f"Empty RAR file: {archive_path}")
-                    return None
-                
-                with rarfile.RarFile(archive_path, 'r') as rar_ref:
-                    if rar_ref.needs_password():
-                        print(f"Password-protected RAR files are not supported: {archive_path}")
-                        return None
-                        
-                    file_list = rar_ref.namelist()
-                    if not file_list:
-                        print(f"Empty RAR archive: {archive_path}")
-                        return None
-                    
-                    for item in rar_ref.infolist():
-                        try:
-                            # Skip directories (we'll handle them from the paths)
-                            if item.isdir():
-                                continue
-                                
-                            # Get relative path and check if it's in the current subpath
-                            rel_path = item.filename.replace('\\', '/').rstrip('/')
-                            if subpath and not (rel_path == subpath or rel_path.startswith(f"{subpath}/")):
-                                continue
-                                
-                            # Calculate the path relative to the current subpath
-                            display_path = rel_path[len(subpath)+1:] if subpath else rel_path
-                            path_parts = display_path.split('/')
-                            
-                            # Add directory entries for the path
-                            current_path = []
-                            for part in path_parts[:-1]:  # All but the last part are directories
-                                current_path.append(part)
-                                dir_path = '/'.join(current_path)
-                                
-                                # Check if we've already added this directory
-                                if not any(e['path'] == dir_path for e in entries):
-                                    entries.append({
-                                        'name': part,
-                                        'path': f"{subpath}/{dir_path}" if subpath else dir_path,
-                                        'size': 0,
-                                        'date': datetime.fromtimestamp(item.mtime) if hasattr(item, 'mtime') else None,
-                                        'is_dir': True
-                                    })
-                            
-                            # Add the file entry
-                            if path_parts[-1]:  # Skip empty filenames (shouldn't happen)
-                                total_size += item.file_size
-                                file_count += 1
-                                
-                                entries.append({
-                                    'name': path_parts[-1],
-                                    'path': rel_path,
-                                    'size': item.file_size,
-                                    'date': datetime.fromtimestamp(item.mtime) if hasattr(item, 'mtime') else None,
-                                    'is_dir': False
-                                })
-                                
-                        except Exception as e:
-                            print(f"Error processing RAR entry {item.filename}: {str(e)}")
-                            continue
-                            
-            except (rarfile.BadRarFile, rarfile.NotRarFile, rarfile.RarCannotExec) as e:
-                print(f"Error processing RAR file {archive_path}: {str(e)}")
-                return None
-            except Exception as e:
-                print(f"Unexpected error processing RAR file {archive_path}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                return None
-        
+            return get_rar_contents(archive_path, subpath)
         # Handle ZIP files
         elif archive_path.lower().endswith('.zip'):
-            try:
-                with zipfile.ZipFile(archive_path, 'r') as zip_ref:
-                    for item in zip_ref.infolist():
-                        try:
-                            # Skip directories (we'll handle them from the paths)
-                            if item.filename.endswith('/'):
-                                continue
-                                
-                            # Get relative path and check if it's in the current subpath
-                            rel_path = item.filename.replace('\\', '/').rstrip('/')
-                            if subpath and not (rel_path == subpath or rel_path.startswith(f"{subpath}/")):
-                                continue
-                                
-                            # Calculate the path relative to the current subpath
-                            display_path = rel_path[len(subpath)+1:] if subpath else rel_path
-                            path_parts = display_path.split('/')
-                            
-                            # Add directory entries for the path
-                            current_path = []
-                            for part in path_parts[:-1]:  # All but the last part are directories
-                                current_path.append(part)
-                                dir_path = '/'.join(current_path)
-                                
-                                # Check if we've already added this directory
-                                if not any(e['path'] == dir_path for e in entries):
-                                    entries.append({
-                                        'name': part,
-                                        'path': f"{subpath}/{dir_path}" if subpath else dir_path,
-                                        'size': 0,
-                                        'date': datetime(*item.date_time) if hasattr(item, 'date_time') else None,
-                                        'is_dir': True
-                                    })
-                            
-                            # Add the file entry
-                            if path_parts[-1]:  # Skip empty filenames (shouldn't happen)
-                                total_size += item.file_size
-                                file_count += 1
-                                
-                                entries.append({
-                                    'name': path_parts[-1],
-                                    'path': rel_path,
-                                    'size': item.file_size,
-                                    'date': datetime(*item.date_time) if hasattr(item, 'date_time') else None,
-                                    'is_dir': False
-                                })
-                                
-                        except Exception as e:
-                            print(f"Error processing ZIP entry {item.filename}: {str(e)}")
-                            continue
-                            
-            except zipfile.BadZipFile as e:
-                print(f"Bad ZIP file {archive_path}: {str(e)}")
-                return None
-            except Exception as e:
-                print(f"Error reading ZIP file {archive_path}: {str(e)}")
-                import traceback
-                traceback.print_exc()
-                return None
+            return get_zip_contents(archive_path, subpath)
         else:
             print(f"Unsupported archive format: {archive_path}")
             return None
-        
-        # Build the directory structure
-        dir_structure = build_directory_structure(entries)
-        
-        # Get the current directory contents
-        current_contents = []
-        if subpath:
-            # Find the current directory in the structure
-            parts = subpath.split('/')
-            current = dir_structure
-            for part in parts:
-                found = False
-                for child in current.get('children', []):
-                    if child['name'] == part and child['is_dir']:
-                        current = child
-                        found = True
-                        break
-                if not found:
-                    # Subpath not found, return empty contents
-                    current = None
-                    break
             
-            if current:
-                current_contents = current.get('children', [])
-        else:
-            current_contents = dir_structure.get('children', [])
-        
-        # Prepare breadcrumbs
-        breadcrumbs = [{'name': os.path.basename(archive_path), 'path': ''}]
-        if subpath:
-            path_parts = []
-            for part in subpath.split('/'):
-                if part:
-                    path_parts.append(part)
-                    breadcrumbs.append({
-                        'name': part,
-                        'path': '/'.join(path_parts)
-                    })
-        
-        return {
-            'name': os.path.basename(archive_path),
-            'path': archive_path,
-            'size': total_size,
-            'file_count': file_count,
-            'contents': sorted(current_contents, key=lambda x: (not x['is_dir'], x['name'].lower())),
-            'is_archive': True,
-            'is_rar': is_rar,
-            'subpath': subpath,
-            'breadcrumbs': breadcrumbs,
-            'has_parent': bool(subpath)
-        }
-        
-    except (zipfile.BadZipFile, rarfile.BadRarFile, rarfile.NotRarFile, Exception) as e:
-        print(f"Error reading archive {archive_path}: {str(e)}")
+    except Exception as e:
+        print(f"Error in get_archive_contents: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return None
 
-def get_file_info(file_path, base_path=None):
+def get_file_info(file_path: str, base_path: str = None) -> dict:
+    """
+    Get information about a file or directory.
+    
+    Args:
+        file_path: Path to the file or directory
+        base_path: Base path to calculate relative path from (defaults to SHARED_FOLDER)
+        
+    Returns:
+        Dict containing file information
+    """
     if base_path is None:
         base_path = SHARED_FOLDER
-    
-    try:
-        # Make sure both paths are absolute and normalized
-        file_path_abs = os.path.abspath(file_path).replace('\\', '/')
-        base_path_abs = os.path.abspath(base_path).replace('\\', '/')
         
-        # Get the relative path from the shared folder
+    try:
+        # Convert to absolute path and normalize
+        file_path_abs = os.path.abspath(file_path).replace('\\', '/')
+        
+        # Get relative path for display
         rel_path = os.path.relpath(file_path_abs, SHARED_FOLDER).replace('\\', '/')
         
-        # If we're at the root, make sure relative_path is empty
-        if rel_path == '.' or file_path_abs == SHARED_FOLDER.replace('\\', '/'):
-            rel_path = ''
+        # Get file stats
+        stat_info = os.stat(file_path_abs)
         
-        # For directories, make sure the path ends with a slash
+        # Determine if it's a directory or file
         is_dir = os.path.isdir(file_path_abs)
-        if is_dir and rel_path and not rel_path.endswith('/'):
-            rel_path += '/'
         
-        # Get the name of the file/directory
-        name = os.path.basename(file_path_abs)
-        
-        # Get size information
-        if is_dir:
-            print(f"Calculating size for folder: {file_path_abs}")
-            size_bytes = get_folder_size(file_path_abs)
-            formatted_size = format_size(size_bytes)
-            raw_size = size_bytes
-            print(f"Folder size for {name}: {formatted_size}")
-        else:
-            try:
-                size_bytes = os.path.getsize(file_path_abs)
-                formatted_size = format_size(size_bytes)
-                raw_size = size_bytes
-                print(f"File size for {name}: {formatted_size}")
-            except (OSError, PermissionError) as e:
-                print(f"Error getting size for {file_path_abs}: {e}")
-                size_bytes = 0
-                formatted_size = "0 B"
-                raw_size = 0
-        
+        # Prepare basic file info
         file_info = {
-            'name': name,
-            'path': file_path_abs,
-            'relative_path': rel_path,
-            'size': raw_size,
-            'formatted_size': formatted_size,
-            'modified': os.path.getmtime(file_path_abs),
-            'is_dir': is_dir
+            'name': os.path.basename(file_path_abs),
+            'path': rel_path,
+            'is_dir': is_dir,
+            'size': 0,
+            'size_formatted': '0 B',
+            'modified': datetime.fromtimestamp(stat_info.st_mtime).strftime('%Y-%m-%d %H:%M:%S'),
+            'relative_path': rel_path
         }
         
-        print(f"File info for {name}: {file_info}")
+        # Get size (recursive for directories)
+        if is_dir:
+            dir_size = get_folder_size(file_path_abs)
+            file_info['size'] = dir_size
+            file_info['size_formatted'] = format_size(dir_size)
+        else:
+            file_info['size'] = stat_info.st_size
+            file_info['size_formatted'] = format_size(stat_info.st_size)
+        
+        # Get file type using python-magic
+        try:
+            mime = magic.Magic(mime=True)
+            file_type = mime.from_file(file_path_abs)
+            file_info['type'] = file_type
+            
+            # For better display, get human-readable type
+            if is_dir:
+                file_info['type'] = 'folder'
+            elif file_type.startswith('image/'):
+                file_info['type'] = 'image'
+            elif file_type == 'application/pdf':
+                file_info['type'] = 'pdf'
+            elif file_type in ['application/zip', 'application/x-rar-compressed', 'application/x-7z-compressed']:
+                file_info['type'] = 'archive'
+            else:
+                # Get the file extension for other types
+                _, ext = os.path.splitext(file_path_abs)
+                file_info['type'] = ext[1:].lower() if ext else 'file'
+                
+        except Exception as e:
+            print(f"Error getting file type for {file_path_abs}: {str(e)}")
+            file_info['type'] = 'file'
+        
         return file_info
         
     except Exception as e:
-        print(f"Error in get_file_info for {file_path}: {e}")
-        # Return minimal info to prevent template errors
+        print(f"Error in get_file_info for {file_path}: {str(e)}")
+        # Return minimal info if there's an error
         return {
             'name': os.path.basename(file_path),
             'path': file_path,
-            'relative_path': '',
+            'is_dir': False,
             'size': 0,
-            'formatted_size': '0 B',
-            'modified': 0,
-            'is_dir': False
+            'size_formatted': '0 B',
+            'modified': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'type': 'unknown',
+            'relative_path': os.path.relpath(file_path, base_path) if base_path else file_path
         }
 
 # Web Interface
 @app.route('/')
-@app.route('/browse/')
-@app.route('/browse/<path:subpath>')
+@app.route('/<path:subpath>')
 @login_required
 def index(subpath=''):
     # Trigger device discovery in the background
@@ -851,128 +923,54 @@ def view_pdf_route(filename):
 @login_required
 def view_archive(filename, subpath=''):
     """View the contents of a ZIP or RAR archive, optionally within a subdirectory."""
-    filepath = os.path.join(SHARED_FOLDER, filename)
-    
-    # Check if file exists
-    if not os.path.exists(filepath):
-        print(f"File not found: {filepath}")
-        return render_template('error.html', 
-                            error_title="Dosya Bulunamadı",
-                            error_message=f"{filename} bulunamadı.",
-                            back_url=url_for('index')), 404
-    
-    # Check if it's a file
-    if not os.path.isfile(filepath):
-        print(f"Not a file: {filepath}")
-        return render_template('error.html',
-                            error_title="Geçersiz Dosya",
-                            error_message=f"{filename} geçerli bir dosya değil.",
-                            back_url=url_for('index')), 400
-    
-    # Check file extension
-    if not (filename.lower().endswith('.zip') or filename.lower().endswith('.rar')):
-        print(f"Unsupported file type: {filepath}")
-        return render_template('error.html',
-                            error_title="Desteklenmeyen Dosya Türü",
-                            error_message=f"Sadece .zip ve .rar dosyaları görüntülenebilir.",
-                            back_url=url_for('index')), 400
-    
-    # Normalize subpath (remove leading/trailing slashes)
-    subpath = subpath.strip('/')
-    
-    # Get archive contents for the specified subpath
     try:
-        archive_data = get_archive_contents(filepath, subpath)
-        if not archive_data:
-            print(f"Unsupported or corrupted archive: {filepath}")
-            return render_template('error.html',
-                                error_title="Geçersiz Arşiv",
-                                error_message=f"Dosya bozuk veya desteklenmeyen bir arşiv formatı.",
-                                back_url=url_for('index')), 400
+        # Ensure the file exists and is within the shared folder
+        filepath = os.path.join(SHARED_FOLDER, filename)
+        if not os.path.isfile(filepath):
+            flash('Dosya bulunamadı.', 'error')
+            return redirect(url_for('index'))
         
-        # If we have a subpath and no contents, it might be a file - try to extract and view it
-        if subpath and not archive_data['contents']:
-            try:
-                # Check if this is a file in the archive
-                with zipfile.ZipFile(filepath, 'r') if filename.lower().endswith('.zip') else rarfile.RarFile(filepath, 'r') as archive:
-                    try:
-                        # Try to get info for the file
-                        file_info = archive.getinfo(subpath)
-                        if not file_info.is_dir():
-                            # Extract the file to a temporary location and serve it
-                            temp_dir = tempfile.mkdtemp()
-                            temp_path = os.path.join(temp_dir, os.path.basename(subpath))
-                            
-                            with archive.open(file_info) as source, open(temp_path, 'wb') as target:
-                                shutil.copyfileobj(source, target)
-                            
-                            # Determine the appropriate viewer based on file extension
-                            ext = os.path.splitext(subpath)[1].lower()
-                            if ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
-                                return redirect(url_for('view_image_route', filename=os.path.basename(temp_path), temp=1))
-                            elif ext == '.pdf':
-                                return redirect(url_for('view_pdf_route', filename=os.path.basename(temp_path), temp=1))
-                            else:
-                                # For other file types, trigger a download
-                                return send_file(temp_path, as_attachment=True)
-                    except (KeyError, rarfile.BadRarFile):
-                        # File not found in archive
-                        pass
-            except Exception as e:
-                print(f"Error extracting file from archive: {str(e)}")
-                import traceback
-                traceback.print_exc()
+        # Check if the file is an archive
+        if not (filename.lower().endswith(('.zip', '.rar'))):
+            flash('Desteklenmeyen arşiv formatı.', 'error')
+            return redirect(url_for('index'))
         
-        # Add parent directory link if we're in a subdirectory
-        parent_path = ''
-        if subpath:
-            parent_parts = subpath.split('/')[:-1]
-            if parent_parts:
-                parent_path = '/'.join(parent_parts)
+        # Handle RAR files
+        if filename.lower().endswith('.rar'):
+            archive_data = get_rar_contents(filepath, subpath)
+        # Handle ZIP files
+        else:
+            archive_data = get_zip_contents(filepath, subpath)
         
-        return render_template('archive_viewer.html',
-                            title=archive_data['name'],
-                            archive_name=archive_data['name'],
-                            file_path=filename,
-                            contents=archive_data['contents'],
-                            file_count=archive_data['file_count'],
-                            total_size=archive_data['size'],
-                            is_rar=archive_data.get('is_rar', False),
-                            subpath=subpath,
-                            parent_path=parent_path,
-                            breadcrumbs=archive_data.get('breadcrumbs', []),
-                            has_parent=bool(subpath),
-                            format_size=format_size)
-    
-    except rarfile.BadRarFile as e:
-        print(f"Bad RAR file: {filepath} - {str(e)}")
-        return render_template('error.html',
-                            error_title="Bozuk Arşiv Dosyası",
-                            error_message="Arşiv dosyası bozuk veya hasarlı görünüyor.",
-                            back_url=url_for('index')), 400
-    
-    except rarfile.NotRarFile as e:
-        print(f"Not a RAR file: {filepath}")
-        return render_template('error.html',
-                            error_title="Geçersiz RAR Dosyası",
-                            error_message="Bu bir RAR dosyası değil veya bozuk olabilir.",
-                            back_url=url_for('index')), 400
-    
-    except rarfile.RarCannotExec as e:
-        print(f"RAR executable not found: {str(e)}")
-        return render_template('error.html',
-                            error_title="Eksik Bağımlılık",
-                            error_message="RAR dosyalarını açmak için sisteminizde unrar kurulu olmalıdır.",
-                            back_url=url_for('index')), 500
-    
+        if not archive_data or not archive_data.get('success'):
+            flash('Arşiv dosyası okunamadı veya bozuk olabilir.', 'error')
+            return redirect(url_for('index'))
+        
+        # Prepare the template context
+        context = {
+            'title': os.path.basename(filename),
+            'archive_name': os.path.basename(filename),
+            'file_path': filename,
+            'contents': archive_data.get('contents', []),
+            'file_count': archive_data.get('file_count', 0),
+            'total_size': archive_data.get('total_size', 0),
+            'is_rar': archive_data.get('is_rar', False),
+            'show_rar_contents': archive_data.get('is_rar', False),
+            'subpath': subpath,
+            'parent_path': archive_data.get('parent_path', ''),
+            'breadcrumbs': archive_data.get('breadcrumbs', []),
+            'has_parent': bool(subpath),
+            'format_size': format_size
+        }
+        
+        return render_template('archive_viewer.html', **context)
+        
     except Exception as e:
-        print(f"Unexpected error processing {filepath}: {str(e)}")
+        print(f"Error in view_archive: {str(e)}")
         import traceback
         traceback.print_exc()
-        return render_template('error.html',
-                            error_title="Beklenmeyen Hata",
-                            error_message=f"Arşiv işlenirken bir hata oluştu: {str(e)}",
-                            back_url=url_for('index')), 500
+        flash(f'Arşiv görüntülenirken bir hata oluştu: {str(e)}', 'error')
+        return redirect(url_for('index'))
 
 @app.route('/view/<path:filename>')
 @login_required
@@ -1273,30 +1271,118 @@ def discover_devices():
 
 def start_server(port):
     """Start the Flask server"""
-    global HOST_IP, zeroconf
-    HOST_IP = get_local_ip()
+    global PUBLIC_IP, server_thread
     
-    # Start ZeroConf service in a separate thread
-    zeroconf_thread = threading.Thread(target=start_zeroconf_service, args=(port,))
-    zeroconf_thread.daemon = True
-    zeroconf_thread.start()
+    try:
+        print("1. Getting public IP...")
+        PUBLIC_IP = get_public_ip()
+        print(f"Public IP: {PUBLIC_IP}")
+    except Exception as e:
+        print(f"Could not determine public IP: {e}")
+        PUBLIC_IP = None
     
-    # Start device discovery in a separate thread
-    discovery_thread = threading.Thread(target=discover_devices)
-    discovery_thread.daemon = True
-    discovery_thread.start()
+    # Start file system watcher in a separate thread with timeout
+    def start_file_watcher():
+        try:
+            print("2. Starting file system watcher...")
+            observer.start()
+            print("   File system watcher started successfully")
+        except Exception as e:
+            print(f"   Error starting file system watcher: {e}")
     
-    # Start Flask server
-    app.run(host=HOST_IP, port=port, debug=True, use_reloader=False, threaded=True)
+    watcher_thread = threading.Thread(target=start_file_watcher, name="FileWatcherThread")
+    watcher_thread.daemon = True
+    watcher_thread.start()
+    
+    # Wait for file system watcher to start (with timeout)
+    watcher_thread.join(timeout=5)
+    if watcher_thread.is_alive():
+        print("   Warning: File system watcher is taking too long to start, continuing...")
+    
+    try:
+        print("3. Starting ZeroConf service...")
+        start_zeroconf_service(port)
+        print("   ZeroConf service started successfully")
+    except Exception as e:
+        print(f"   Error starting ZeroConf service: {e}")
+    
+    try:
+        print("4. Starting device discovery...")
+        discovery_thread = threading.Thread(target=discover_devices, name="DiscoveryThread")
+        discovery_thread.daemon = True
+        discovery_thread.start()
+        print("   Device discovery started in background")
+    except Exception as e:
+        print(f"   Error starting device discovery: {e}")
+    
+    # Run Flask in a separate thread
+    def run_flask():
+        try:
+            print("5. Starting Flask server...")
+            app.run(host=HOST_IP, port=port, debug=True, use_reloader=False, threaded=True)
+        except Exception as e:
+            print(f"   Error in Flask server: {e}")
+    
+    try:
+        server_thread = threading.Thread(target=run_flask, name="FlaskThread")
+        server_thread.daemon = True
+        server_thread.start()
+        print("   Flask server started in background")
+    except Exception as e:
+        print(f"   Error starting Flask server: {e}")
+    
+    # Print ready message
+    try:
+        local_ip = get_local_ip()
+        print("\n" + "="*50)
+        print("   HER ŞEY HAZIR!")
+        print("="*50)
+        print(f"\nYerel Ağda Erişim: http://{local_ip}:{port}")
+        if PUBLIC_IP:
+            print(f"Genel İnternet Erişimi: http://{PUBLIC_IP}:{port}")
+        print("\nUygulama arka planda çalışmaya devam ediyor...")
+        print("Çıkmak için Ctrl+C tuşlarına basın.")
+        print("="*50 + "\n")
+    except Exception as e:
+        print(f"Error displaying ready message: {e}")
+    
+    # Keep the main thread alive
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        print("\nSunucu kapatılıyor...")
+        try:
+            stop_zeroconf_service()
+            observer.stop()
+            observer.join()
+        except Exception as e:
+            print(f"Error during shutdown: {e}")
+        print("Sunucu başarıyla kapatıldı.")
 
 def get_public_ip():
     """Get the public IP address of the machine"""
-    try:
-        response = requests.get('https://api.ipify.org?format=json', timeout=5)
-        if response.status_code == 200:
-            return response.json().get('ip')
-    except:
-        pass
+    services = [
+        'https://api.ipify.org?format=json',
+        'https://ipapi.co/json/',
+        'https://ipinfo.io/json'
+    ]
+    
+    for service in services:
+        try:
+            print(f"Trying to get public IP from {service}")
+            response = requests.get(service, timeout=5)
+            if response.status_code == 200:
+                data = response.json()
+                ip = data.get('ip') or data.get('ip')
+                if ip:
+                    print(f"Successfully got public IP: {ip}")
+                    return ip
+        except Exception as e:
+            print(f"Failed to get IP from {service}: {str(e)}")
+            continue
+    
+    print("Warning: Could not determine public IP. Using 127.0.0.1")
     return None
 
 def check_relay_server(server_url):

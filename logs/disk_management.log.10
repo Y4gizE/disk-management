@@ -1,0 +1,123 @@
+2025-08-05 22:28:48,509 ERROR: Exception on /auth/login [GET] [in C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py:875]
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\routes\auth.py", line 60, in login
+    return render_template('auth/login.html')
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\templating.py", line 150, in render_template
+    return _render(app, template, context)
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\templating.py", line 131, in _render
+    rv = template.render(context)
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\jinja2\environment.py", line 1295, in render
+    self.environment.handle_exception()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\jinja2\environment.py", line 942, in handle_exception
+    raise rewrite_traceback_stack(source=source)
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\templates\auth\login.html", line 1, in top-level template code
+    {% extends "base.html" %}
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\templates\base.html", line 42, in top-level template code
+    <a class="nav-link" href="{{ url_for('index') }}">Ana Sayfa</a>
+    ^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1121, in url_for
+    return self.handle_url_build_error(error, endpoint, values)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1110, in url_for
+    rv = url_adapter.build(  # type: ignore[union-attr]
+        endpoint,
+    ...<3 lines>...
+        force_external=_external,
+    )
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\routing\map.py", line 924, in build
+    raise BuildError(endpoint, values, method, self)
+werkzeug.routing.exceptions.BuildError: Could not build url for endpoint 'index'. Did you mean 'main.index' instead?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\routes\auth.py", line 66, in login
+    print("Stack trace:", traceback.format_exc())
+                          ^^^^^^^^^
+NameError: name 'traceback' is not defined. Did you forget to import 'traceback'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 809, in handle_user_exception
+    return self.ensure_sync(handler)(e)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\app.py", line 117, in handle_exception
+    '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'))
+           ^^^^^^^^^^^^^^^
+NameError: name 'render_template' is not defined
+2025-08-05 22:28:48,522 ERROR: 500 Error: 500 Internal Server Error: The server encountered an internal error and was unable to complete your request. Either the server is overloaded or there is an error in the application. [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:111]
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\routes\auth.py", line 60, in login
+    return render_template('auth/login.html')
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\templating.py", line 150, in render_template
+    return _render(app, template, context)
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\templating.py", line 131, in _render
+    rv = template.render(context)
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\jinja2\environment.py", line 1295, in render
+    self.environment.handle_exception()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\jinja2\environment.py", line 942, in handle_exception
+    raise rewrite_traceback_stack(source=source)
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\templates\auth\login.html", line 1, in top-level template code
+    {% extends "base.html" %}
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\templates\base.html", line 42, in top-level template code
+    <a class="nav-link" href="{{ url_for('index') }}">Ana Sayfa</a>
+    ^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1121, in url_for
+    return self.handle_url_build_error(error, endpoint, values)
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1110, in url_for
+    rv = url_adapter.build(  # type: ignore[union-attr]
+        endpoint,
+    ...<3 lines>...
+        force_external=_external,
+    )
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\werkzeug\routing\map.py", line 924, in build
+    raise BuildError(endpoint, values, method, self)
+werkzeug.routing.exceptions.BuildError: Could not build url for endpoint 'index'. Did you mean 'main.index' instead?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 917, in full_dispatch_request
+    rv = self.dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 902, in dispatch_request
+    return self.ensure_sync(self.view_functions[rule.endpoint])(**view_args)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\routes\auth.py", line 66, in login
+    print("Stack trace:", traceback.format_exc())
+                          ^^^^^^^^^
+NameError: name 'traceback' is not defined. Did you forget to import 'traceback'?
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 1511, in wsgi_app
+    response = self.full_dispatch_request()
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 919, in full_dispatch_request
+    rv = self.handle_user_exception(e)
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask_cors\extension.py", line 176, in wrapped_function
+    return cors_after_request(app.make_response(f(*args, **kwargs)))
+                                                ~^^^^^^^^^^^^^^^^^
+  File "C:\Users\Sarýý\AppData\Local\Programs\Python\Python313\Lib\site-packages\flask\app.py", line 809, in handle_user_exception
+    return self.ensure_sync(handler)(e)  # type: ignore[no-any-return]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+  File "C:\Users\Sarýý\Desktop\Proje\disk-management\app.py", line 117, in handle_exception
+    '%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]'))
+           ^^^^^^^^^^^^^^^
+NameError: name 'render_template' is not defined
+2025-08-05 22:28:48,750 ERROR: 404 Error: 404 Not Found: The requested URL was not found on the server. If you entered the URL manually please check your spelling and try again. [in C:\Users\Sarýý\Desktop\Proje\disk-management\app.py:106]

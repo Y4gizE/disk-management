@@ -1,0 +1,40 @@
+FROM python:3.9-slim
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y \
+    wget \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install unrar from source
+RUN mkdir -p /tmp/unrar && \
+    cd /tmp/unrar && \
+    wget https://www.rarlab.com/rar/unrarsrc-6.2.6.tar.gz && \
+    tar -xzf unrarsrc-6.2.6.tar.gz && \
+    cd unrar && \
+    make -j$(nproc) && \
+    make install && \
+    cd / && \
+    rm -rf /tmp/unrar
+
+WORKDIR /app
+
+# Install Python dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV SHARED_FOLDER=/app/shared
+
+# Create shared directory
+RUN mkdir -p /app/shared
+
+# Copy application code
+COPY . .
+
+# Expose the port the app runs on
+EXPOSE 5000
+
+# Command to run the application
+CMD ["python", "main.py", "server"]

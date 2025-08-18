@@ -1,5 +1,211 @@
 {% extends "viewer_base.html" %}
 
+{% block head %}
+{{ super() }}
+<style>
+    :root {
+        --primary-color: #4e73df;
+        --secondary-color: #6c757d;
+        --success-color: #1cc88a;
+        --info-color: #36b9cc;
+        --warning-color: #f6c23e;
+        --danger-color: #e74a3b;
+        --light-color: #f8f9fc;
+        --dark-color: #5a5c69;
+    }
+    
+    .archive-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+        animation: fadeIn 0.3s ease-in-out;
+    }
+    
+    @keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    .archive-header {
+        border-radius: 8px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+    .archive-header .badge {
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+    .file-icon {
+        font-size: 1.2rem;
+        margin-right: 8px;
+        width: 24px;
+        text-align: center;
+    }
+    .file-row {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    .file-row:hover {
+        background-color: rgba(0, 0, 0, 0.03);
+    }
+    .file-name {
+        display: flex;
+        align-items: center;
+    }
+    .file-actions {
+        visibility: hidden;
+        white-space: nowrap;
+        transition: all 0.2s ease;
+    }
+    .file-row:hover .file-actions {
+        visibility: visible;
+        opacity: 1;
+    }
+    .file-actions .btn {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.875rem;
+        line-height: 1.5;
+    }
+    .sort-header {
+        cursor: pointer;
+        user-select: none;
+        transition: color 0.2s ease;
+        color: var(--secondary-color);
+        font-weight: 600;
+    }
+    .sort-header:hover {
+        color: var(--primary-color);
+        text-decoration: none;
+    }
+    .sort-header.active {
+        color: var(--primary-color);
+    }
+    .sort-icon {
+        font-size: 0.8em;
+        opacity: 0.5;
+    }
+    .sort-asc .bi-arrow-down-up::before {
+        content: "\F148";
+    }
+    .sort-desc .bi-arrow-down-up::before {
+        content: "\F149";
+    }
+    /* Enhanced Modal styles */
+    #rarContentModal .modal-dialog {
+        max-width: 90%;
+        max-height: 90vh;
+        margin: 1.75rem auto;
+    }
+    #rarContentModal .modal-content {
+        border: none;
+        border-radius: 0.5rem;
+        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+    #rarContentModal .modal-header {
+        background-color: var(--primary-color);
+        color: white;
+        border-top-left-radius: 0.5rem;
+        border-top-right-radius: 0.5rem;
+        padding: 1rem 1.5rem;
+    }
+    #rarContentModal .modal-title {
+        font-weight: 600;
+    }
+    #rarContentModal .btn-close {
+        filter: invert(1) brightness(100%);
+        opacity: 0.8;
+    }
+    #rarContentModal .btn-close:hover {
+        opacity: 1;
+    }
+    #rarContentModal .modal-body {
+        max-height: 70vh;
+        overflow-y: auto;
+    }
+    .file-preview {
+        max-width: 100%;
+        max-height: 60vh;
+        margin: 0 auto;
+        display: block;
+        border-radius: 0.25rem;
+        box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+        transition: transform 0.2s ease;
+    }
+    .file-preview:hover {
+        transform: scale(1.02);
+    }
+    .file-preview-container {
+        text-align: center;
+        padding: 20px;
+    }
+    .file-info {
+        background-color: var(--light-color);
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1.25rem;
+        border-left: 4px solid var(--primary-color);
+    }
+    .file-info-item {
+        margin-bottom: 0.5rem;
+        display: flex;
+        align-items: center;
+    }
+    .file-info-label {
+        font-weight: 600;
+        color: var(--dark-color);
+        min-width: 120px;
+    }
+    .file-info-value {
+        color: var(--secondary-color);
+        word-break: break-all;
+    }
+    .file-preview-actions {
+        margin-top: 1.25rem;
+        display: flex;
+        gap: 0.5rem;
+        justify-content: center;
+        flex-wrap: wrap;
+    }
+    
+    /* Loading spinner */
+    .loading-spinner {
+        display: inline-block;
+        width: 2rem;
+        height: 2rem;
+        border: 0.25rem solid rgba(0, 0, 0, 0.1);
+        border-radius: 50%;
+        border-top-color: var(--primary-color);
+        animation: spin 1s ease-in-out infinite;
+        margin: 2rem auto;
+        display: none;
+    }
+    
+    @keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+    
+    /* Responsive adjustments */
+    @media (max-width: 768px) {
+        .archive-header {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+        .file-actions {
+            visibility: visible !important;
+            opacity: 1 !important;
+        }
+        .table-responsive {
+            border: 1px solid #dee2e6;
+            border-radius: 0.35rem;
+            overflow: hidden;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="archive-container">
     <!-- Archive header with info -->
@@ -48,31 +254,61 @@
             <table class="table table-hover table-sm mb-0">
                 <thead class="table-light">
                     <tr>
-                        <th>Dosya Adı</th>
-                        <th class="text-end" style="width: 120px;">Boyut</th>
-                        <th style="width: 180px;">Değiştirilme Tarihi</th>
+                        <th>
+                            <a href="#" class="text-decoration-none text-dark sort-header" data-sort="name">
+                                Dosya Adı 
+                                <i class="bi bi-arrow-down-up sort-icon" data-sort="name"></i>
+                            </a>
+                        </th>
+                        <th class="text-end" style="width: 150px;">
+                            <a href="#" class="text-decoration-none text-dark sort-header" data-sort="size">
+                                Boyut 
+                                <i class="bi bi-arrow-down-up sort-icon" data-sort="size"></i>
+                            </a>
+                        </th>
+                        <th style="width: 180px;">
+                            <a href="#" class="text-decoration-none text-dark sort-header" data-sort="type">
+                                Tür 
+                                <i class="bi bi-arrow-down-up sort-icon" data-sort="type"></i>
+                            </a>
+                        </th>
+                        <th style="width: 180px;">
+                            <a href="#" class="text-decoration-none text-dark sort-header" data-sort="date">
+                                Değiştirilme Tarihi 
+                                <i class="bi bi-arrow-down-up sort-icon" data-sort="date"></i>
+                            </a>
+                        </th>
+                        <th style="width: 100px;">İşlemler</th>
                     </tr>
                 </thead>
                 <tbody>
                     {% if has_parent %}
                     <tr class="table-active">
                         <td colspan="3">
+                            {% if parent_path %}
                             <a href="{{ url_for('view_archive', filename=file_path, subpath=parent_path) }}" class="text-decoration-none d-block">
-                                <i class="bi bi-arrow-90deg-up"></i> Üst Dizin
+                                <i class="bi bi-arrow-90deg-up"></i> Üst Dizine Git
                             </a>
+                            {% else %}
+                            <a href="{{ url_for('view_archive', filename=file_path) }}" class="text-decoration-none d-block">
+                                <i class="bi bi-arrow-90deg-up"></i> Ana Dizine Dön
+                            </a>
+                            {% endif %}
                         </td>
                     </tr>
                     {% endif %}
                     
                     {% if contents %}
                         {% for item in contents %}
+                        {% set item_path = item.path|string %}
                         <tr class="{{ 'table-active' if item.is_dir }}">
                             <td>
-                                <a href="{{ url_for('view_archive', filename=file_path, subpath=item.path) if item.is_dir else '#' }}" 
-                                   class="text-decoration-none d-block {{ 'stretched-link' if item.is_dir }}"
-                                   {% if not item.is_dir %}
-                                   onclick="event.preventDefault(); return false;"
-                                   {% endif %}>
+                                {% if item.is_dir %}
+                                    <a href="{{ url_for('view_archive', filename=file_path, subpath=item_path) }}" 
+                                       class="text-decoration-none d-block stretched-link">
+                                {% else %}
+                                    <a href="#" class="text-decoration-none d-block">
+                                {% endif %}
                                     <div class="d-flex align-items-center">
                                         <div class="me-2">
                                             {% if item.is_dir %}
@@ -112,11 +348,60 @@
                                     </div>
                                 </a>
                             </td>
-                            <td class="text-end text-muted small align-middle">
+                            <td class="text-end text-muted small align-middle" data-sort="{{ item.size if not item.is_dir else -1 }}">
                                 {% if not item.is_dir %}{{ format_size(item.size) }}{% else %}-{% endif %}
                             </td>
-                            <td class="text-muted small align-middle">
+                            <td class="text-muted small align-middle" data-sort="{{ item.name.split('.')[-1].lower() if '.' in item.name else '' }}">
+                                {% if item.is_dir %}
+                                    Klasör
+                                {% else %}
+                                    {% set ext = item.name.split('.')[-1].lower() if '.' in item.name else '' %}
+                                    {% if ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg'] %}
+                                        Resim
+                                    {% elif ext in ['pdf'] %}
+                                        PDF
+                                    {% elif ext in ['doc', 'docx'] %}
+                                        Word
+                                    {% elif ext in ['xls', 'xlsx'] %}
+                                        Excel
+                                    {% elif ext in ['ppt', 'pptx'] %}
+                                        PowerPoint
+                                    {% elif ext in ['zip', 'rar', '7z', 'tar', 'gz'] %}
+                                        Arşiv
+                                    {% elif ext in ['txt', 'md', 'ini', 'conf', 'log'] %}
+                                        Metin
+                                    {% elif ext in ['mp3', 'wav', 'ogg', 'flac'] %}
+                                        Ses
+                                    {% elif ext in ['mp4', 'avi', 'mov', 'mkv', 'webm'] %}
+                                        Video
+                                    {% else %}
+                                        Diğer
+                                    {% endif %}
+                                {% endif %}
+                            </td>
+                            <td class="text-muted small align-middle" data-sort="{{ item.date.timestamp() if item.date else 0 }}">
                                 {{ item.date.strftime('%d.%m.%Y %H:%M') if item.date else '-' }}
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    {% if is_rar and not item.is_dir %}
+                                    <button class="btn btn-sm btn-outline-primary view-rar-content" 
+                                            data-filename="{{ file_path }}" 
+                                            data-filepath="{{ item.path }}"
+                                            data-bs-toggle="tooltip" 
+                                            title="İçeriği Görüntüle">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    {% endif %}
+                                    {% if not item.is_dir %}
+                                    <a href="{{ url_for('download_file', filename=file_path, file=item.path) }}" 
+                                       class="btn btn-sm btn-outline-success"
+                                       data-bs-toggle="tooltip" 
+                                       title="İndir">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </td>
                         </tr>
                         {% endfor %}
@@ -151,6 +436,39 @@
         max-width: 1200px;
         margin: 0 auto;
         padding: 20px;
+    }
+    
+    .sort-header {
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+    }
+    
+    .sort-header:hover {
+        text-decoration: none;
+    }
+    
+    .sort-icon {
+        margin-left: 4px;
+        font-size: 0.8em;
+        opacity: 0.5;
+    }
+    
+    .sort-header:hover .sort-icon,
+    .sort-header.active .sort-icon {
+        opacity: 1;
+    }
+    
+    .sort-header.active {
+        font-weight: bold;
+    }
+    
+    .sort-header.active.asc .bi-arrow-down-up::before {
+        content: "\f148";
+    }
+    
+    .sort-header.active.desc .bi-arrow-down-up::before {
+        content: "\f162";
     }
     
     .breadcrumb {
@@ -227,4 +545,417 @@
         position: relative;
     }
 </style>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const table = document.querySelector('.table');
+    const tbody = table.querySelector('tbody');
+    const headers = document.querySelectorAll('.sort-header');
+    const rows = Array.from(tbody.querySelectorAll('tr:not(.table-active)'));
+    
+    // Remove parent directory row from sorting
+    const parentRow = tbody.querySelector('tr.table-active');
+    
+    // Function to sort the table
+    function sortTable(column, direction) {
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr:not(.table-active)'));
+        
+        // Sort the rows based on the column and direction
+        rows.sort((a, b) => {
+            let aValue, bValue;
+            
+            // Get the cell value based on the column index
+            if (column === 'name') {
+                aValue = a.cells[0].textContent.trim().toLowerCase();
+                bValue = b.cells[0].textContent.trim().toLowerCase();
+                return direction === 'asc' ? 
+                    aValue.localeCompare(bValue) : 
+                    bValue.localeCompare(aValue);
+                    
+            } else if (column === 'size') {
+                aValue = parseFloat(a.cells[1].getAttribute('data-sort') || 0);
+                bValue = parseFloat(b.cells[1].getAttribute('data-sort') || 0);
+                return direction === 'asc' ? aValue - bValue : bValue - aValue;
+                
+            } else if (column === 'type') {
+                aValue = a.cells[2].textContent.trim().toLowerCase();
+                bValue = b.cells[2].textContent.trim().toLowerCase();
+                return direction === 'asc' ? 
+                    aValue.localeCompare(bValue) : 
+                    bValue.localeCompare(aValue);
+                    
+            } else if (column === 'date') {
+                aValue = parseFloat(a.cells[3].getAttribute('data-sort') || 0);
+                bValue = parseFloat(b.cells[3].getAttribute('data-sort') || 0);
+                return direction === 'asc' ? aValue - bValue : bValue - aValue;
+            }
+            
+            return 0;
+        });
+        
+        // Rebuild the table
+        if (parentRow) {
+            tbody.innerHTML = '';
+            tbody.appendChild(parentRow);
+        } else {
+            tbody.innerHTML = '';
+        }
+        
+        rows.forEach(row => tbody.appendChild(row));
+    }
+    
+    // Add click event listeners to headers
+    headers.forEach(header => {
+        header.addEventListener('click', function(e) {
+            e.preventDefault();
+            
+            const column = this.getAttribute('data-sort');
+            let direction = 'asc';
+            
+            // Toggle direction if clicking the same column
+            if (this.classList.contains('active')) {
+                direction = this.classList.contains('asc') ? 'desc' : 'asc';
+            }
+            
+            // Update UI
+            headers.forEach(h => {
+                h.classList.remove('active', 'asc', 'desc');
+            });
+            
+            this.classList.add('active', direction);
+            
+            // Sort the table
+            sortTable(column, direction);
+            
+            // Save sort preference
+            localStorage.setItem('archiveSortColumn', column);
+            localStorage.setItem('archiveSortDirection', direction);
+        });
+    });
+    
+    // Apply saved sort preference
+    const savedColumn = localStorage.getItem('archiveSortColumn');
+    const savedDirection = localStorage.getItem('archiveSortDirection');
+    
+    if (savedColumn && savedDirection) {
+        const header = document.querySelector(`.sort-header[data-sort="${savedColumn}"]`);
+        if (header) {
+            header.classList.add('active', savedDirection);
+            sortTable(savedColumn, savedDirection);
+        }
+    }
+});
+</script>
+<!-- RAR Content Modal -->
+<div class="modal fade" id="rarContentModal" tabindex="-1" aria-labelledby="rarContentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rarContentModalLabel">
+                    <i class="bi bi-file-earmark-zip text-warning me-2"></i>
+                    <span>Dosya İçeriği</span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Kapat"></button>
+            </div>
+            <div class="modal-body p-0">
+                <!-- Loading Spinner -->
+                <div id="loadingSpinner" class="d-flex justify-content-center align-items-center" style="min-height: 200px;">
+                    <div class="text-center">
+                        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+                            <span class="visually-hidden">Yükleniyor...</span>
+                        </div>
+                        <p class="mt-3 text-muted">Dosya içeriği yükleniyor, lütfen bekleyin...</p>
+                    </div>
+                </div>
+                
+                <!-- File Info Section (initially hidden) -->
+                <div id="fileInfoSection" class="p-4 border-bottom" style="display: none;">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div class="file-info-item">
+                                <span class="file-info-label"><i class="bi bi-file-earmark-text me-2"></i>Dosya Adı:</span>
+                                <span id="modal-filename" class="file-info-value text-truncate">-</span>
+                            </div>
+                            <div class="file-info-item">
+                                <span class="file-info-label"><i class="bi bi-hdd me-2"></i>Boyut:</span>
+                                <span id="modal-filesize" class="file-info-value">-</span>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="file-info-item">
+                                <span class="file-info-label"><i class="bi bi-filetype-txt me-2"></i>Tür:</span>
+                                <span id="modal-filetype" class="file-info-value">-</span>
+                            </div>
+                            <div class="file-info-item">
+                                <span class="file-info-label"><i class="bi bi-calendar3 me-2"></i>Değiştirilme:</span>
+                                <span id="modal-filedate" class="file-info-value">-</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- File Content Section -->
+                <div id="fileContentSection" class="p-4" style="min-height: 300px;">
+                    <!-- Dynamic content will be inserted here -->
+                </div>
+                
+                <!-- Error Message (initially hidden) -->
+                <div id="errorMessage" class="alert alert-danger m-4" role="alert" style="display: none;">
+                    <div class="d-flex align-items-center">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <div>
+                            <h5 class="alert-heading mb-1">Hata Oluştu!</h5>
+                            <p class="mb-0" id="errorText">Dosya içeriği yüklenirken bir hata oluştu.</p>
+                        </div>
+                    </div>
+                    <div class="mt-3 text-end">
+                        <button id="retryButton" class="btn btn-warning btn-sm">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Tekrar Dene
+                        </button>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a id="downloadRarFileBtn" href="#" class="btn btn-primary" style="display: none;">
+                    <i class="bi bi-download me-1"></i> İndir
+                </a>
+                <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-lg me-1"></i> Kapat
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Initialize tooltips
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+
+        // RAR content modal
+                            displayFileContent(data);
+                        })
+                        .catch(error => {
+                            console.error('Error fetching file content:', error);
+                            showError(`Dosya içeriği yüklenirken bir hata oluştu: ${error.message}`);
+                            
+                            // Update modal title
+                            modalTitle.textContent = 'Hata';
+                            
+                            // Add retry button
+                            const retryButton = document.createElement('button');
+                            retryButton.className = 'btn btn-warning mt-3';
+                            retryButton.innerHTML = '<i class="bi bi-arrow-clockwise"></i> Tekrar Dene';
+                            retryButton.onclick = function() {
+                                button.click(); // Retry the same action
+                            };
+                            
+                            const modalBody = modal.querySelector('.modal-body');
+                            modalBody.appendChild(retryButton);
+                        });
+                });
+            });    
+            
+            // Function to show loading state
+            function showLoading(show = true) {
+                const loadingSpinner = document.getElementById('loadingSpinner');
+                const modalBody = document.querySelector('#rarContentModal .modal-body');
+                
+                if (show) {
+                    modalBody.innerHTML = '<div class="d-flex justify-content-center align-items-center" style="min-height: 200px;"><div class="loading-spinner"></div><span class="ms-3">Yükleniyor...</span></div>';
+                    loadingSpinner.style.display = 'block';
+                } else {
+                    loadingSpinner.style.display = 'none';
+                }
+            }
+            
+            // Function to show error message
+            function showError(message) {
+                const modalBody = document.querySelector('#rarContentModal .modal-body');
+                modalBody.innerHTML = `
+                    <div class="alert alert-danger d-flex align-items-center" role="alert">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <div>${message}</div>
+                    </div>
+                `;
+            }
+            
+            // Function to display file content based on type
+            function displayFileContent(data) {
+                const modal = document.getElementById('rarContentModal');
+                const modalTitle = modal.querySelector('.modal-title');
+                const modalBody = document.querySelector('#rarContentModal .modal-body');
+                const downloadBtn = document.getElementById('downloadRarFileBtn');
+                
+                // Hide loading spinner
+                showLoading(false);
+                
+                // Set modal title
+                modalTitle.textContent = data.filename || 'Dosya İçeriği';
+                
+                // Set download button
+                if (data.download_url) {
+                    downloadBtn.href = data.download_url;
+                    downloadBtn.style.display = 'inline-block';
+                } else {
+                    downloadBtn.style.display = 'none';
+                }
+                
+                // Clear previous content
+                modalBody.innerHTML = '';
+                
+                // Handle different content types
+                if (data.error) {
+                    showError(data.error || 'Dosya içeriği yüklenirken bir hata oluştu.');
+                    return;
+                }
+                
+                try {
+                    if (data.content_type === 'text') {
+                        const container = document.createElement('div');
+                        container.className = 'file-preview-container';
+                        
+                        // Add file info
+                        const fileInfo = document.createElement('div');
+                        fileInfo.className = 'file-info mb-3';
+                        fileInfo.innerHTML = `
+                            <div class="file-info-item">
+                                <span class="file-info-label">Dosya Boyutu:</span>
+                                <span class="file-info-value">${formatFileSize(data.size || 0)}</span>
+                            </div>
+                            <div class="file-info-item">
+                                <span class="file-info-label">Dosya Türü:</span>
+                                <span class="file-info-value">${getFileType(data.filename || '')}</span>
+                            </div>
+                        `;
+                        container.appendChild(fileInfo);
+                        
+                        // Add content
+                        const pre = document.createElement('pre');
+                        pre.className = 'bg-light p-3 rounded';
+                        pre.textContent = data.content || 'İçerik yok';
+                        container.appendChild(pre);
+                        
+                        modalBody.appendChild(container);
+                    } 
+                    else if (data.content_type === 'image') {
+                        const container = document.createElement('div');
+                        container.className = 'file-preview-container';
+                        
+                        const img = document.createElement('img');
+                        img.src = 'data:image/png;base64,' + data.content;
+                        img.className = 'img-fluid file-preview';
+                        img.alt = data.filename || 'Resim Önizleme';
+                        img.loading = 'lazy';
+                        
+                        container.appendChild(img);
+                        modalBody.appendChild(container);
+                    }
+                    else if (data.content_type === 'pdf') {
+                        const container = document.createElement('div');
+                        container.className = 'file-preview-container';
+                        
+                        const embed = document.createElement('embed');
+                        embed.src = 'data:application/pdf;base64,' + data.content;
+                        embed.type = 'application/pdf';
+                        embed.className = 'file-preview';
+                        embed.style.height = '70vh';
+                        embed.setAttribute('aria-label', 'PDF Önizleme');
+                        
+                        container.appendChild(embed);
+                        modalBody.appendChild(container);
+                    }
+                    else {
+                        // Unsupported file type
+                        showError('Bu dosya türü önizleme desteklemiyor.');
+                        return;
+                    }
+                    
+                    // Add file actions
+                    const actionsDiv = document.createElement('div');
+                    actionsDiv.className = 'file-preview-actions';
+                    actionsDiv.innerHTML = `
+                        <a href="${data.download_url || '#'}" class="btn btn-primary" download>
+                            <i class="bi bi-download"></i> İndir
+                        </a>
+                        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+                            <i class="bi bi-x-lg"></i> Kapat
+                        </button>
+                    `;
+                    modalBody.appendChild(actionsDiv);
+                    
+                } catch (error) {
+                    console.error('Error displaying file content:', error);
+                    showError('Dosya içeriği gösterilirken bir hata oluştu: ' + error.message);
+                }
+                
+                // Show the modal
+                const modalInstance = new bootstrap.Modal(modal);
+                modalInstance.show();
+            }
+            
+            fileContent.classList.remove('d-none');
+        }
+    });
+    
+    // Table sorting functionality
+    function sortTable(column, direction) {
+        const table = document.querySelector('.table');
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        // Remove existing sort indicators
+        document.querySelectorAll('.sort-asc, .sort-desc').forEach(el => {
+            el.classList.remove('sort-asc', 'sort-desc');
+        });
+        
+        // Add sort indicator to current column
+        const header = document.querySelector(`th a[data-sort="${column}"]`);
+        if (header) {
+            header.parentElement.classList.add(direction === 'asc' ? 'sort-asc' : 'sort-desc');
+        }
+        
+        // Sort rows
+        rows.sort((a, b) => {
+            let aValue = a.querySelector(`td[data-sort]`)?.dataset.sort || '';
+            let bValue = b.querySelector(`td[data-sort]`)?.dataset.sort || '';
+            
+            // Convert to number if possible
+            if (!isNaN(parseFloat(aValue)) && !isNaN(parseFloat(bValue))) {
+                aValue = parseFloat(aValue);
+                bValue = parseFloat(bValue);
+            }
+            
+            if (aValue < bValue) return direction === 'asc' ? -1 : 1;
+            if (aValue > bValue) return direction === 'asc' ? 1 : -1;
+            return 0;
+        });
+        
+        // Re-append rows in sorted order
+        rows.forEach(row => tbody.appendChild(row));
+    }
+    
+    // Add click event listeners to sort headers
+    document.querySelectorAll('.sort-header').forEach(header => {
+        header.addEventListener('click', function(e) {
+            e.preventDefault();
+            const column = this.dataset.sort;
+            const currentDir = this.closest('th').classList.contains('sort-asc') ? 'desc' : 'asc';
+            sortTable(column, currentDir);
+        });
+    });
+    
+    // Initial sort by name ascending
+    document.addEventListener('DOMContentLoaded', () => {
+        sortTable('name', 'asc');
+    });
+</script>
 {% endblock %}
