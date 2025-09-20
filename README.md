@@ -82,6 +82,7 @@ Sistem, RAR arşivlerini görüntülemek için entegre bir işlemci kullanır. B
 - Çok büyük RAR dosyalarında (2GB+) performans düşebilir
 - RAR5 formatı sınırlı destek sunmaktadır
 - Windows'ta Docker kullanırken dosya izinlerine dikkat edilmelidir
+- Linux'ta depolanan ortak klasör /root/Downloads/DiskStorage/ dizininde yer almaktadır.
 
 ## Sorun Giderme
 
