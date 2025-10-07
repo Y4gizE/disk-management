@@ -24,8 +24,8 @@ Sistem, RAR arşivlerini görüntülemek için entegre bir işlemci kullanır. B
 
 ## Kurulum
 
-**Dosya izinlerini ayarlayın (Linux için):**  
-1. ```bash
+1.**Dosya izinlerini ayarlayın (Linux için):**  
+   ```bash
    chmod 777 -R disk-management
    ```
 2. **Sanal ortam oluşturun ve etkinleştirin (Linux için önerilir):**  
