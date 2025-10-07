@@ -24,18 +24,22 @@ Sistem, RAR arşivlerini görüntülemek için entegre bir işlemci kullanır. B
 
 ## Kurulum
 
-1. **Sanal ortam oluşturun ve etkinleştirin (Linux için önerilir):**  
+**Dosya izinlerini ayarlayın (Linux için):**  
+1. ```bash
+   chmod 777 -R disk-management
+   ```
+2. **Sanal ortam oluşturun ve etkinleştirin (Linux için önerilir):**  
    ```bash
    python3 -m venv venv
    source venv/bin/activate
    ```
 
-2. **Gerekli Python paketlerini yükleyin:**  
+3. **Gerekli Python paketlerini yükleyin:**  
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Docker imajını oluşturun ve uygulamayı başlatın:**  
+4. **Docker imajını oluşturun ve uygulamayı başlatın:**  
    ```bash
    # Docker imajını oluştur
    docker build -t disk-management .
