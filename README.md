@@ -2,7 +2,7 @@
 
 A distributed file storage system with web interface, supporting file sharing over local network with built-in RAR archive support.
 
-## Özellikler
+## Özellikler (EKSİKLER GÜNCELLENECEKTİR ve KURULUM KOLAYLIĞI SAĞLANACAKTIR)
 
 - Ağ üzerinden dosya paylaşımı
 - Web arayüzü üzerinden dosya yükleme/indirme/silme
@@ -22,35 +22,35 @@ Sistem, RAR arşivlerini görüntülemek için entegre bir işlemci kullanır. B
 - Python 3.9+
 - Gerekli Python paketleri (`requirements.txt` dosyasında listelenmiştir)
 
-### Kurulum
+## Kurulum
 
-1. Gerekli Python paketlerini yükleyin:
+1. **Sanal ortam oluşturun ve etkinleştirin (Linux için önerilir):**  
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate
+   ```
+
+2. **Gerekli Python paketlerini yükleyin:**  
    ```bash
    pip install -r requirements.txt
    ```
 
-2. Docker imajını oluşturun ve uygulamayı başlatın:
+3. **Docker imajını oluşturun ve uygulamayı başlatın:**  
    ```bash
    # Docker imajını oluştur
    docker build -t disk-management .
    
    # Konteyneri başlat (RAR işlemcisi otomatik olarak etkinleştirilecektir)
-   docker run -d --name disk-management \
-     -p 5000:5000 \
-     -p 5001:5001 \
-     -v "%USERPROFILE%\Downloads\DiskStorage:/app/shared_storage" \
-     -e ENABLE_RAR_PROCESSOR=true \
-     disk-management
+   docker run -d --name disk-management      -p 5000:5000      -p 5001:5001      -v "$HOME/Downloads/DiskStorage:/app/shared_storage"      -e ENABLE_RAR_PROCESSOR=true      disk-management
    ```
 
-   Veya doğrudan Python ile çalıştırmak için:
+   **Alternatif olarak doğrudan Python ile çalıştırmak için:**  
    ```bash
-   # RAR işlemcisini etkinleştirerek uygulamayı başlat
-   $env:ENABLE_RAR_PROCESSOR="true"
+   export ENABLE_RAR_PROCESSOR=true
    python main.py
    ```
 
-### RAR İşlemcisi Özellikleri
+## RAR İşlemcisi Özellikleri
 
 - RAR arşivlerinin içeriğini tarayıcıda görüntüleme
 - Metin dosyalarını doğrudan tarayıcıda önizleme
