@@ -1,0 +1,435 @@
+{% extends "viewer_base.html" %}
+
+{% block head %}
+{{ super() }}
+<style>
+    :root {
+        --primary-color: #e74a3b;
+        --info-color: #f6c23e;
+    }
+    
+    .archive-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .top-navigation {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+    }
+    
+    .back-to-home {
+        font-size: 1.1rem;
+        font-weight: 500;
+    }
+    
+    .parent-dir-btn {
+        font-weight: 500;
+        padding: 5px 15px;
+    }
+    
+    .archive-header {
+        border-radius: 8px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+        background-color: var(--primary-color);
+        color: white;
+    }
+    
+    .file-icon {
+        font-size: 1.2rem;
+        margin-right: 8px;
+        width: 24px;
+        text-align: center;
+    }
+    
+    .file-row {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .file-row:hover {
+        background-color: rgba(0, 0, 0, 0.03);
+    }
+    
+    .sort-header {
+        cursor: pointer;
+        user-select: none;
+        color: var(--info-color);
+    }
+    
+    .sort-header:hover {
+        text-decoration: none;
+        color: var(--primary-color);
+    }
+    
+    .sort-arrow {
+        margin-left: 5px;
+    }
+    
+    .breadcrumb-item a {
+        color: var(--info-color);
+    }
+    
+    .breadcrumb-item.active {
+        color: var(--primary-color);
+    }
+    
+    .file-preview {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    
+    .folder-link {
+        transition: all 0.2s ease;
+    }
+    
+    .folder-link:hover {
+        transform: translateX(3px);
+        color: var(--primary-color) !important;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="archive-container">
+    <!-- Üst navigasyon -->
+    <div class="top-navigation">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary back-to-home">
+            <i class="bi bi-house-door"></i> Ana Sayfa
+        </a>
+        
+        {% if has_parent %}
+        <a href="{{ url_for('view_archive', filename=file_path, subpath=parent_path) }}" 
+           class="btn btn-warning parent-dir-btn">
+            <i class="bi bi-arrow-90deg-up me-1"></i> Üst Dizine Dön
+        </a>
+        {% endif %}
+    </div>
+    
+    <!-- Arşiv başlığı -->
+    <div class="archive-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <i class="bi bi-file-earmark-zip-fill me-2"></i>
+                <strong>{{ file_path }}</strong>
+                <span class="badge bg-white text-dark ms-2">{{ contents|length }} öğe</span>
+            </div>
+            <div>
+                <a href="{{ url_for('download_file', filename=file_path) }}" class="btn btn-light btn-sm">
+                    <i class="bi bi-download me-1"></i> Tümünü İndir
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Breadcrumb navigasyonu -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Ana Sayfa</a></li>
+            {% if breadcrumbs %}
+                {% for crumb in breadcrumbs %}
+                    <li class="breadcrumb-item"><a href="{{ url_for('view_archive', filename=file_path, subpath=crumb.path) }}">{{ crumb.name }}</a></li>
+                {% endfor %}
+            {% endif %}
+            <li class="breadcrumb-item active" aria-current="page">{{ file_path|basename }}</li>
+        </ol>
+    </nav>
+    
+    <!-- File listing -->
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th class="sort-header" onclick="sortTable(this, true)">
+                            İsim
+                            <i class="bi bi-arrow-down-up sort-arrow"></i>
+                        </th>
+                        <th class="text-end sort-header" onclick="sortTable(this, true)">
+                            Boyut
+                            <i class="bi bi-arrow-down-up sort-arrow"></i>
+                        </th>
+                        <th class="sort-header" onclick="sortTable(this, true)">
+                            Değiştirilme Tarihi
+                            <i class="bi bi-arrow-down-up sort-arrow"></i>
+                        </th>
+                        <th class="text-end">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if has_parent %}
+                    <tr class="table-active">
+                        <td colspan="4">
+                            <a href="{{ url_for('view_archive', filename=file_path, subpath=parent_path) }}" class="text-decoration-none text-dark d-flex align-items-center">
+                                <i class="bi bi-folder2-open text-warning me-2"></i>
+                                <span>Üst Dizine Dön</span>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    
+                    {% for item in contents %}
+                    <tr class="file-row">
+                        <td>
+                            {% if item.is_dir %}
+                                <a href="{{ url_for('view_archive', filename=file_path, subpath=item.path) }}" 
+                                   class="text-decoration-none text-dark d-flex align-items-center folder-link"
+                                   title="{{ item.name }} klasörüne git">
+                                    <i class="bi bi-folder-fill text-warning me-2"></i>
+                                    <span class="text-truncate" style="max-width: 350px;">
+                                        {{ item.name }}
+                                    </span>
+                                </a>
+                            {% else %}
+                                <div class="d-flex align-items-center">
+                                    <i class="bi bi-file-earmark me-2"></i>
+                                    <span class="text-truncate" style="max-width: 350px;">
+                                        {{ item.name }}
+                                    </span>
+                                </div>
+                            {% endif %}
+                        </td>
+                        <td class="text-end">
+                            {% if not item.is_dir %}{{ format_size(item.size) }}{% else %}-{% endif %}
+                        </td>
+                        <td>
+                            {{ item.date.strftime('%d.%m.%Y %H:%M') if item.date else '-' }}
+                        </td>
+                        <td class="text-end">
+                            <div class="btn-group btn-group-sm">
+                                {% if not item.is_dir %}
+                                <button class="btn btn-outline-primary btn-sm view-rar-content" 
+                                        data-filename="{{ file_path }}" 
+                                        data-filepath="{{ item.path }}"
+                                        data-bs-toggle="tooltip" 
+                                        title="İçeriği Görüntüle">
+                                    <i class="bi bi-eye"></i>
+                                </button>
+                                <a href="{{ url_for('download_file', filename=file_path, file=item.path) }}" 
+                                   class="btn btn-outline-success btn-sm"
+                                   data-bs-toggle="tooltip" 
+                                   title="İndir">
+                                    <i class="bi bi-download"></i>
+                                </a>
+                                {% endif %}
+                            </div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Quick actions -->
+    <div class="mt-3 d-flex justify-content-between">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left"></i> Dosya Yöneticisine Dön
+        </a>
+        <div>
+            <a href="#" class="btn btn-outline-secondary" onclick="window.scrollTo({top: 0, behavior: 'smooth'}); return false;">
+                <i class="bi bi-arrow-up"></i> Yukarı Çık
+            </a>
+        </div>
+    </div>
+</div>
+
+<!-- RAR Content Modal -->
+<div class="modal fade" id="rarContentModal" tabindex="-1" aria-labelledby="rarContentModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="rarContentModalLabel">
+                    <i class="bi bi-file-earmark-text me-2"></i>
+                    <span>Dosya İçeriği: <span id="modalFileName"></span></span>
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <div id="loadingSpinner" class="text-center py-5">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Yükleniyor...</span>
+                    </div>
+                    <p class="mt-2">Dosya içeriği yükleniyor...</p>
+                </div>
+                <div id="fileContent" class="p-3" style="display: none;">
+                    <pre id="textContent" class="mb-0 file-preview"></pre>
+                    <div id="imageContent" class="text-center"></div>
+                    <div id="errorContent" class="text-danger"></div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Kapat</button>
+                <a id="downloadBtn" href="#" class="btn btn-primary">
+                    <i class="bi bi-download me-1"></i> İndir
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // RAR content modal functionality
+    const modal = new bootstrap.Modal(document.getElementById('rarContentModal'));
+    const modalTitle = document.querySelector('#rarContentModalLabel span');
+    const loadingSpinner = document.getElementById('loadingSpinner');
+    const fileContent = document.getElementById('fileContent');
+    const textContent = document.getElementById('textContent');
+    const imageContent = document.getElementById('imageContent');
+    const errorContent = document.getElementById('errorContent');
+    const downloadBtn = document.getElementById('downloadBtn');
+    
+    // Table sorting functionality
+    function sortTable(header, ascending) {
+        const table = header.closest('table');
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        const columnIndex = Array.from(header.parentNode.children).indexOf(header);
+        
+        // Sort rows
+        rows.sort((a, b) => {
+            const aCell = a.cells[columnIndex];
+            const bCell = b.cells[columnIndex];
+            
+            // Skip parent directory row
+            if (aCell.colSpan > 1) return -1;
+            if (bCell.colSpan > 1) return 1;
+            
+            // Get cell values
+            let aValue = aCell.getAttribute('data-sort') || aCell.textContent.trim();
+            let bValue = bCell.getAttribute('data-sort') || bCell.textContent.trim();
+            
+            // Convert to numbers if possible
+            if (!isNaN(aValue) && !isNaN(bValue)) {
+                aValue = parseFloat(aValue);
+                bValue = parseFloat(bValue);
+            }
+            
+            // Compare values
+            if (aValue < bValue) return ascending ? -1 : 1;
+            if (aValue > bValue) return ascending ? 1 : -1;
+            return 0;
+        });
+        
+        // Re-append rows in sorted order
+        rows.forEach(row => tbody.appendChild(row));
+        
+        // Update sort indicators
+        const headers = table.querySelectorAll('th');
+        headers.forEach((h, i) => {
+            const icon = h.querySelector('.sort-arrow');
+            if (i === columnIndex) {
+                icon.className = `bi bi-arrow-${ascending ? 'up' : 'down'}-short sort-arrow`;
+            } else {
+                icon.className = 'bi bi-arrow-down-up sort-arrow';
+            }
+        });
+    }
+    
+    // Add event listeners for RAR content viewing
+    document.querySelectorAll('.view-rar-content').forEach(button => {
+        button.addEventListener('click', function(e) {
+            e.preventDefault();
+            const filename = this.dataset.filename;
+            const filepath = this.dataset.filepath;
+            
+            // Reset modal
+            showLoading(true);
+            
+            // Set filename in modal
+            modalTitle.textContent = filepath.split('/').pop();
+            
+            // Show modal
+            modal.show();
+            
+            // Load file content
+            loadFileContent(filename, filepath);
+        });
+    });
+    
+    function showLoading(show = true) {
+        if (show) {
+            loadingSpinner.style.display = 'block';
+            fileContent.style.display = 'none';
+            errorContent.textContent = '';
+            imageContent.innerHTML = '';
+            textContent.textContent = '';
+        } else {
+            loadingSpinner.style.display = 'none';
+            fileContent.style.display = 'block';
+        }
+    }
+    
+    function showError(message) {
+        showLoading(false);
+        errorContent.textContent = message;
+    }
+    
+    function loadFileContent(filename, filepath) {
+        fetch(`/api/archive/content?filename=${encodeURIComponent(filename)}&filepath=${encodeURIComponent(filepath)}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    throw new Error(data.error);
+                }
+                displayFileContent(data);
+            })
+            .catch(error => {
+                console.error('Error loading file content:', error);
+                showError(`Dosya yüklenirken bir hata oluştu: ${error.message}`);
+            });
+    }
+    
+    function displayFileContent(data) {
+        showLoading(false);
+        
+        // Set download link
+        downloadBtn.href = data.download_url;
+        
+        if (data.is_image) {
+            // Display image
+            const img = document.createElement('img');
+            img.src = `data:${data.mime_type};base64,${data.content}`;
+            img.className = 'img-fluid';
+            img.style.maxHeight = '70vh';
+            imageContent.appendChild(img);
+        } else if (data.is_text) {
+            // Display text content
+            textContent.textContent = data.content;
+        } else {
+            // Unsupported file type
+            showError('Bu dosya türü önizleme için desteklenmiyor.');
+        }
+    }
+    
+    // Initialize tooltips
+    const tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    const tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
+    });
+    
+    // Add click event listeners to headers
+    document.querySelectorAll('.sort-header').forEach(header => {
+        header.addEventListener('click', function(e) {
+            e.preventDefault();
+            const isAscending = !this.classList.contains('sorted-asc');
+            sortTable(this, isAscending);
+            
+            // Update sort classes
+            document.querySelectorAll('.sort-header').forEach(h => {
+                h.classList.remove('sorted-asc', 'sorted-desc');
+            });
+            this.classList.add(isAscending ? 'sorted-asc' : 'sorted-desc');
+        });
+    });
+</script>
+{% endblock %}

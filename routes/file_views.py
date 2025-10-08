@@ -1,10 +1,9 @@
-
 import os
 import io
 import zipfile
 import tempfile
 import shutil
-from flask import Blueprint, render_template, request, send_file, redirect, url_for, flash, abort
+from flask import Blueprint, render_template, request, send_file, redirect, url_for, flash, abort, jsonify
 from werkzeug.utils import secure_filename
 from utils.decorators import login_required
 from utils.helpers import format_size
@@ -153,7 +152,10 @@ def create_file_view_routes(file_service, archive_service):
             
             contents = archive_data.get('contents', [])
             
-            return render_template('archive_viewer.html',
+            # Determine which template to use based on archive type
+            template_name = 'rar_viewer.html' if is_rar else 'zip_viewer.html'
+            
+            return render_template(template_name,
                                 title=os.path.basename(filename),
                                 archive_name=os.path.basename(filename),
                                 file_path=filename,

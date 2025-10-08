@@ -57,12 +57,12 @@ class RarService:
                     current_path = ''
                     
                     for part in parts:
-                        if not part:
+                        if not part:  # Skip empty parts (like root directory)
                             continue
                             
                         current_path = os.path.join(current_path, part) if current_path else part
                         
-                        if current_path not in processed_dirs:
+                        if current_path not in processed_dirs and current_path != subpath:  # Don't add the current subpath as a directory
                             contents.append({
                                 'name': part,
                                 'path': current_path,

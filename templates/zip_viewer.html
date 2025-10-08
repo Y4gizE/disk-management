@@ -1,0 +1,248 @@
+{% extends "viewer_base.html" %}
+
+{% block head %}
+{{ super() }}
+<style>
+    :root {
+        --primary-color: #4e73df;
+        --info-color: #36b9cc;
+    }
+    
+    .archive-container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+    
+    .archive-header {
+        border-radius: 8px;
+        padding: 15px 20px;
+        margin-bottom: 20px;
+        background-color: var(--info-color);
+        color: white;
+    }
+    
+    .file-icon {
+        font-size: 1.2rem;
+        margin-right: 8px;
+        width: 24px;
+        text-align: center;
+    }
+    
+    .file-row {
+        cursor: pointer;
+        transition: background-color 0.2s;
+    }
+    
+    .file-row:hover {
+        background-color: rgba(0, 0, 0, 0.03);
+    }
+    
+    .sort-header {
+        cursor: pointer;
+        user-select: none;
+        color: var(--info-color);
+    }
+    
+    .sort-header:hover {
+        text-decoration: none;
+        color: var(--primary-color);
+    }
+    
+    .sort-arrow {
+        margin-left: 5px;
+    }
+    
+    .breadcrumb-item a {
+        color: var(--info-color);
+    }
+    
+    .breadcrumb-item.active {
+        color: var(--primary-color);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="archive-container">
+    <!-- Archive header with info -->
+    <div class="archive-header">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <i class="bi bi-file-earmark-zip-fill me-2"></i>
+                <strong>{{ file_path }}</strong>
+                <span class="badge bg-white text-dark ms-2">{{ contents|length }} öğe</span>
+            </div>
+            <div>
+                <a href="{{ url_for('download_file', filename=file_path) }}" class="btn btn-light btn-sm">
+                    <i class="bi bi-download me-1"></i> Tümünü İndir
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Breadcrumb navigation -->
+    <nav aria-label="breadcrumb" class="mb-3">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Ana Sayfa</a></li>
+            {% if breadcrumbs %}
+                {% for crumb in breadcrumbs %}
+                    <li class="breadcrumb-item"><a href="{{ url_for('view_archive', filename=file_path, subpath=crumb.path) }}">{{ crumb.name }}</a></li>
+                {% endfor %}
+            {% endif %}
+            <li class="breadcrumb-item active" aria-current="page">{{ file_path|basename }}</li>
+        </ol>
+    </nav>
+    
+    <!-- File listing -->
+    <div class="card shadow-sm">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th><a href="#" class="sort-header" data-sort="name">İsim <i class="sort-arrow"></i></a></th>
+                        <th class="text-end"><a href="#" class="sort-header" data-sort="size">Boyut <i class="sort-arrow"></i></a></th>
+                        <th class="text-end"><a href="#" class="sort-header" data-sort="date">Değiştirilme <i class="sort-arrow"></i></a></th>
+                        <th class="text-end">İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% if has_parent %}
+                    <tr class="table-active parent-row">
+                        <td colspan="4">
+                            <a href="{{ url_for('view_archive', filename=file_path, subpath=parent_path) }}" class="text-decoration-none text-dark d-flex align-items-center">
+                                <i class="bi bi-folder2-open text-warning me-2"></i>
+                                <span>Üst Dizine Dön</span>
+                            </a>
+                        </td>
+                    </tr>
+                    {% endif %}
+                    
+                    {% if contents %}
+                        {% for item in contents %}
+                        {% set item_path = item.path|string %}
+                        <tr class="file-row">
+                            <td class="align-middle">
+                                {% if item.is_dir %}
+                                    <a href="{{ url_for('view_archive', filename=file_path, subpath=item_path) }}" class="text-decoration-none text-dark d-flex align-items-center">
+                                        <i class="bi bi-folder-fill text-warning me-2"></i>
+                                        <span class="text-truncate" style="max-width: 400px;">{{ item.name }}</span>
+                                    </a>
+                                {% else %}
+                                    <div class="d-flex align-items-center">
+                                        <i class="bi bi-file-earmark-text me-2"></i>
+                                        <span class="text-truncate" style="max-width: 400px;">{{ item.name }}</span>
+                                    </div>
+                                {% endif %}
+                            </td>
+                            <td class="text-muted small align-middle text-end" data-sort="{{ item.size if not item.is_dir else 0 }}">
+                                {% if not item.is_dir %}
+                                    {{ item.size|filesizeformat(true) }}
+                                {% endif %}
+                            </td>
+                            <td class="text-muted small align-middle text-end" data-sort="{{ item.modified }}">
+                                {{ item.modified|datetimeformat }}
+                            </td>
+                            <td class="text-end">
+                                <div class="btn-group btn-group-sm">
+                                    {% if not item.is_dir %}
+                                    <a href="{{ url_for('download_file', filename=file_path, file=item.path) }}" 
+                                       class="btn btn-outline-success"
+                                       data-bs-toggle="tooltip" 
+                                       title="İndir">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                    {% endif %}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted py-4">
+                                <i class="bi bi-inbox" style="font-size: 2rem;"></i>
+                                <div class="mt-2">Klasör boş</div>
+                            </td>
+                        </tr>
+                    {% endif %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    
+    <!-- Quick actions -->
+    <div class="mt-3 d-flex justify-content-between">
+        <a href="{{ url_for('index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Geri Dön
+        </a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+    // Sorting functionality
+    document.querySelectorAll('.sort-header').forEach(header => {
+        header.addEventListener('click', function(e) {
+            e.preventDefault();
+            const sortBy = this.dataset.sort;
+            const isActive = this.classList.contains('active');
+            const isAsc = !this.classList.contains('asc');
+            
+            // Update UI
+            document.querySelectorAll('.sort-header').forEach(h => {
+                h.classList.remove('active', 'asc', 'desc');
+            });
+            
+            this.classList.add('active');
+            this.classList.add(isAsc ? 'asc' : 'desc');
+            
+            // Update sort arrow
+            const icon = this.querySelector('.sort-arrow');
+            icon.className = 'sort-arrow bi ' + (isAsc ? 'bi-arrow-up' : 'bi-arrow-down');
+            
+            // Sort table
+            sortTable(this, isAsc);
+        });
+    });
+    
+    function sortTable(header, ascending) {
+        const table = header.closest('table');
+        const tbody = table.querySelector('tbody');
+        const rows = Array.from(tbody.querySelectorAll('tr'));
+        
+        // Skip the parent directory row if it exists
+        const parentRow = tbody.querySelector('.parent-row');
+        const startIndex = parentRow ? 1 : 0;
+        const sortableRows = parentRow ? rows.slice(1) : rows;
+        
+        const colIndex = Array.from(header.parentNode.parentNode.children).indexOf(header.parentNode);
+        
+        sortableRows.sort((a, b) => {
+            const aVal = a.children[colIndex].getAttribute('data-sort') || a.children[colIndex].textContent.trim();
+            const bVal = b.children[colIndex].getAttribute('data-sort') || b.children[colIndex].textContent.trim();
+            
+            // Numeric comparison for size and date
+            if (colIndex === 1 || colIndex === 2) {
+                return ascending ? aVal - bVal : bVal - aVal;
+            }
+            
+            // String comparison for name
+            return ascending 
+                ? aVal.localeCompare(bVal, 'tr', {sensitivity: 'base'})
+                : bVal.localeCompare(aVal, 'tr', {sensitivity: 'base'});
+        });
+        
+        // Re-append rows in sorted order
+        if (parentRow) {
+            tbody.innerHTML = '';
+            tbody.appendChild(parentRow);
+            sortableRows.forEach(row => tbody.appendChild(row));
+        } else {
+            tbody.innerHTML = '';
+            sortableRows.forEach(row => tbody.appendChild(row));
+        }
+    }
+</script>
+{% endblock %}

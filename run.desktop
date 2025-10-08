@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Run Disk Storage
+Comment=Start Disk Storage App
+Exec=/bin/bash -c "/home/kaiser/disk-management/run.sh"
+Terminal=true
+Type=Application
+Icon=utilities-terminal

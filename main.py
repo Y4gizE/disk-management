@@ -514,117 +514,104 @@ def get_zip_contents(archive_path: str, subpath: str = '') -> Optional[Dict[str,
         entries = []
         dir_structure = {'name': '', 'path': '', 'children': []}
         breadcrumbs = []
+        seen_dirs = set()
         
         with zipfile.ZipFile(archive_path, 'r') as zip_ref:
+            # First pass: collect all files and directories
+            all_files = []
             for item in zip_ref.infolist():
+                # Skip directory entries (they're handled by the file paths)
+                if item.filename.endswith('/'):
+                    continue
+                    
+                # Normalize the path
+                rel_path = item.filename.replace('\\', '/').rstrip('/')
+                all_files.append((rel_path, item))
+            
+            # Second pass: process files and build directory structure
+            for rel_path, item in all_files:
                 try:
-                    # Skip directories (we'll handle them from the paths)
-                    if item.filename.endswith('/'):
-                        continue
-                        
-                    # Get relative path and check if it's in the current subpath
-                    rel_path = item.filename.replace('\\', '/').rstrip('/')
+                    # Skip if not in the current subpath
                     if subpath and not (rel_path == subpath or rel_path.startswith(f"{subpath}/")):
                         continue
-                        
-                    # Calculate the path relative to the current subpath
-                    display_path = rel_path[len(subpath)+1:] if subpath else rel_path
-                    path_parts = display_path.split('/')
                     
-                    # Add directory entries for the path
-                    current_path = []
-                    for part in path_parts[:-1]:  # All but the last part are directories
-                        current_path.append(part)
-                        dir_path = '/'.join(current_path)
+                    # Split the path into components
+                    path_parts = rel_path.split('/')
+                    
+                    # Calculate the display path (relative to subpath)
+                    if subpath:
+                        display_parts = rel_path[len(subpath):].strip('/').split('/')
+                        if not display_parts or not display_parts[0]:
+                            continue
+                    else:
+                        display_parts = path_parts
+                    
+                    # Handle the current directory level
+                    current_dir = ''
+                    
+                    # Add parent directory entry if we're in a subdirectory
+                    if len(display_parts) > 1:
+                        dir_name = display_parts[0]
+                        dir_path = f"{subpath}/{dir_name}" if subpath else dir_name
                         
-                        # Check if we've already added this directory
-                        if not any(e['path'] == dir_path for e in entries):
-                            # Convert datetime to timestamp safely
-                            if hasattr(item, 'date_time') and item.date_time and len(item.date_time) >= 6:
-                                try:
-                                    dt = datetime(*item.date_time[:6])
-                                    modified = int(dt.timestamp())
-                                except (TypeError, ValueError):
-                                    modified = 0
-                            else:
-                                modified = 0
-                                
+                        # Add directory entry if not already added
+                        if dir_path not in seen_dirs:
                             entries.append({
-                                'name': part,
-                                'path': f"{subpath}/{dir_path}" if subpath else dir_path,
+                                'name': dir_name,
+                                'path': dir_path,
                                 'size': 0,
-                                'modified': modified,
+                                'modified': 0,
                                 'is_dir': True
                             })
+                            seen_dirs.add(dir_path)
                     
-                    # Add the file entry with safe datetime conversion
-                    if hasattr(item, 'date_time') and item.date_time and len(item.date_time) >= 6:
-                        try:
-                            dt = datetime(*item.date_time[:6])
-                            modified = int(dt.timestamp())
-                        except (TypeError, ValueError):
-                            modified = 0
-                    else:
+                    # Add the file entry (if it's a direct child of the current subpath)
+                    if len(display_parts) == 1 or (subpath and rel_path.startswith(subpath)):
+                        # Get file modification time
                         modified = 0
+                        if hasattr(item, 'date_time') and item.date_time and len(item.date_time) >= 6:
+                            try:
+                                dt = datetime(*item.date_time[:6])
+                                modified = int(dt.timestamp())
+                            except (TypeError, ValueError):
+                                pass
                         
-                    file_entry = {
-                        'name': path_parts[-1],
-                        'path': rel_path,
-                        'size': item.file_size,
-                        'compressed_size': item.compress_size,
-                        'modified': modified,
-                        'is_dir': False
-                    }
-                    entries.append(file_entry)
-                    
+                        entries.append({
+                            'name': display_parts[-1],
+                            'path': rel_path,
+                            'size': item.file_size,
+                            'modified': modified,
+                            'is_dir': False,
+                            'compressed_size': item.compress_size
+                        })
+                
                 except Exception as e:
-                    print(f"Error processing ZIP entry {item.filename}: {str(e)}")
+                    print(f"Error processing ZIP entry {rel_path}: {str(e)}")
                     continue
         
-        # Build directory structure
-        for entry in entries:
-            path_parts = entry['path'].split('/')
-            current_level = dir_structure['children']
-            
-            for i, part in enumerate(path_parts):
-                existing = next((item for item in current_level if item['name'] == part), None)
-                
-                if existing is None:
-                    new_node = {
-                        'name': part,
-                        'path': '/'.join(path_parts[:i+1]),
-                        'size': entry.get('size', 0),
-                        'compressed_size': entry.get('compressed_size', 0),
-                        'modified': entry.get('modified', 0),
-                        'is_dir': entry.get('is_dir', False) or i < len(path_parts) - 1,
-                        'children': []
-                    }
-                    current_level.append(new_node)
-                    current_level = new_node['children']
-                else:
-                    current_level = existing['children']
-        
-        # Prepare breadcrumbs if we have a subpath
+        # Build breadcrumbs if we're in a subdirectory
         if subpath:
             parts = subpath.split('/')
             current_path = ''
             for i, part in enumerate(parts):
                 if part:  # Skip empty parts
-                    current_path = current_path + '/' + part if current_path else part
+                    current_path = f"{current_path}/{part}" if current_path else part
                     breadcrumbs.append({
                         'name': part,
-                        'path': current_path,
-                        'is_last': i == len(parts) - 1
+                        'path': current_path
                     })
+        
+        # Sort entries: directories first, then files, both alphabetically
+        entries.sort(key=lambda x: (not x['is_dir'], x['name'].lower()))
         
         return {
             'success': True,
-            'contents': dir_structure.get('children', []),
-            'file_count': len(entries),
-            'total_size': sum(e.get('size', 0) for e in entries if not e.get('is_dir')),
+            'contents': entries,
+            'file_count': len([e for e in entries if not e['is_dir']]),
+            'total_size': sum(e.get('size', 0) for e in entries if not e.get('is_dir', False)),
             'is_rar': False,
             'breadcrumbs': breadcrumbs,
-            'parent_path': os.path.dirname(subpath.rstrip('/')) if subpath else ''
+            'parent_path': '/'.join(subpath.split('/')[:-1]) if '/' in subpath else ''
         }
         
     except Exception as e:
@@ -929,6 +916,9 @@ def view_archive(filename, subpath=''):
         if not os.path.isfile(filepath):
             flash('Dosya bulunamadı.', 'error')
             return redirect(url_for('index'))
+        
+        # Normalize subpath to remove any leading/trailing slashes
+        subpath = subpath.strip('/')
         
         # Check if the file is an archive
         if not (filename.lower().endswith(('.zip', '.rar'))):

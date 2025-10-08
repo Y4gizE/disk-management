@@ -2,13 +2,15 @@ services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile.rar
+      dockerfile: Dockerfile  # .rar uzantısı kaldırıldı
+    container_name: disk-storage-container
     ports:
       - "5000:5000"
     volumes:
-      - ./shared:/app/shared
+      - ~/Downloads/DiskStorage:/shared_storage:rw  # kur.sh ile uyumlu
       - ./:/app
     environment:
-      - FLASK_DEBUG=1
-      - SHARED_FOLDER=/app/shared
+      - FLASK_DEBUG=0  # Production için 0 yapıldı
+      - PYTHONUNBUFFERED=1
     restart: unless-stopped
+    command: python main.py server  # Açık komut

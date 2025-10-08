@@ -1,12 +1,15 @@
 FROM python:3.9-slim
 
-# Install system dependencies
+# Sistem bağımlılıkları (requirements.txt ile uyumlu)
 RUN apt-get update && apt-get install -y \
     wget \
     build-essential \
+    gcc \
+    g++ \
+    libmagic1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install unrar from source
+# unrar kurulumu (rarfile için)
 RUN mkdir -p /tmp/unrar && \
     cd /tmp/unrar && \
     wget https://www.rarlab.com/rar/unrarsrc-6.2.6.tar.gz && \
@@ -17,24 +20,21 @@ RUN mkdir -p /tmp/unrar && \
     cd / && \
     rm -rf /tmp/unrar
 
+# Çalışma dizini
 WORKDIR /app
 
-# Install Python dependencies
+# Requirements'ı kopyala ve kur
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Set environment variables
-ENV PYTHONUNBUFFERED=1
-ENV SHARED_FOLDER=/app/shared
-
-# Create shared directory
-RUN mkdir -p /app/shared
-
-# Copy application code
+# Uygulama dosyalarını kopyala
 COPY . .
 
-# Expose the port the app runs on
+# Port aç
 EXPOSE 5000
 
-# Command to run the application
+# Paylaşılan klasör
+VOLUME /shared_storage
+
+# Uygulamayı başlat
 CMD ["python", "main.py", "server"]
