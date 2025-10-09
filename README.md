@@ -28,15 +28,15 @@ Sistem, RAR arşivlerini görüntülemek için entegre bir işlemci kullanır. B
    ```bash
    chmod 777 -R disk-management
    ```
-   1. adımdan sonrasına gerek kalmadı ama silmeyeceğim 2. B planı olarak dursun. çalıştırmak için :
-      ```bash
-      docker-compose up -d --build
-      ```
-      veya sırasıyla
-      ```bash
-      ./kur.sh
-      ./run.sh
-      ```
+               1. adımdan sonrasına gerek kalmadı ama silmeyeceğim 2. B planı olarak dursun. çalıştırmak için :
+                  ```bash
+                  docker-compose up -d --build
+                  ```
+                  veya sırasıyla
+                  ```bash
+                  ./kur.sh
+                  ./run.sh
+                  ```
 3. **Sanal ortam oluşturun ve etkinleştirin (Linux için önerilir):**  
    ```bash
    python3 -m venv venv
