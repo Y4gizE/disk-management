@@ -1,16 +1,18 @@
+version: "3.9"
+
 services:
   app:
     build:
       context: .
-      dockerfile: Dockerfile  # .rar uzantısı kaldırıldı
+      dockerfile: Dockerfile
     container_name: disk-storage-container
     ports:
       - "5000:5000"
     volumes:
-      - ~/Downloads/DiskStorage:/shared_storage:rw  # kur.sh ile uyumlu
-      - ./:/app
+      - ~/Downloads/DiskStorage:/shared_storage:rw  # kalıcı veri
+      - ./:/app:rw  # uygulama dosyaları
     environment:
-      - FLASK_DEBUG=0  # Production için 0 yapıldı
-      - PYTHONUNBUFFERED=1
+      FLASK_DEBUG: "0"          # Production modu
+      PYTHONUNBUFFERED: "1"     # Python buffer kapalı
     restart: unless-stopped
-    command: python main.py server  # Açık komut
+    command: ["python", "main.py", "server"]

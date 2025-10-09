@@ -1,12 +1,14 @@
+# Python 3.9 slim tabanlı imaj
 FROM python:3.9-slim
 
-# Sistem bağımlılıkları (requirements.txt ile uyumlu)
+# Sistem bağımlılıkları
 RUN apt-get update && apt-get install -y \
     wget \
     build-essential \
     gcc \
     g++ \
     libmagic1 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # unrar kurulumu (rarfile için)
@@ -23,8 +25,9 @@ RUN mkdir -p /tmp/unrar && \
 # Çalışma dizini
 WORKDIR /app
 
-# Requirements'ı kopyala ve kur
+# Requirements dosyasını kopyala ve yükle
 COPY requirements.txt .
+RUN pip install --upgrade pip setuptools wheel
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Uygulama dosyalarını kopyala
@@ -34,7 +37,7 @@ COPY . .
 EXPOSE 5000
 
 # Paylaşılan klasör
-VOLUME /shared_storage
+VOLUME ["/shared_storage"]
 
 # Uygulamayı başlat
 CMD ["python", "main.py", "server"]
