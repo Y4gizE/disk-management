@@ -8,5 +8,5 @@ psutil==5.9.6
 zeroconf==0.71.1
 netifaces==0.11.0
 rarfile==4.0
-python-magic==0.5.0
+python-magic==0.4.3
 flask-wtf==1.1.1
