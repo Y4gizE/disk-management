@@ -40,7 +40,7 @@ Sistem, RAR arşivlerini görüntülemek için entegre bir işlemci kullanır. B
 3. **Sanal ortam oluşturun ve etkinleştirin (Linux için önerilir):**  
    ```bash
    python3 -m venv venv
-   source venv/bin/activate
+   source venv/bin/activate                .\venv\Scripts\Activate.ps1
    ```
 
 4. **Gerekli Python paketlerini yükleyin:**  
